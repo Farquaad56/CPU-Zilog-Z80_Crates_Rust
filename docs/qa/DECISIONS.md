@@ -16,3 +16,4 @@
 | D-021 | 2026-10-31 | Oracle de semantique = `docs/ref/z80_ref.js` (passe ZEXDOC/ZEXALL); oracle hors-ligne pour Hermes = `docs/specs/data/{diff,alu_crc}.tsv` | Claude |
 | D-012 | 2026-10-31 | Crate `puce-z80-machines` (std) : machines d'essai partagees par cli et web | Claude |
 | D-022 | 2026-10-31 | Convention de PC en HALT = reference JS (PC reste sur HALT) ; a recaler sur SingleStepTests (E13) | Claude |
+| D-023 | 2026-10-31 | Chaine multi-bots a partir de E03: codeur `z80_crate`, relecteur `relecteur`, validateur `validateur` (carte `<id>-V`, `tools/validate.ps1`: check, done, commit local). Le validateur est le seul bot autorise a lancer `task.py check/done` et `git commit`; jamais push ni approve (gates humaines). Voir docs/06_PIPELINE_MULTI_BOTS.md | utilisateur |
