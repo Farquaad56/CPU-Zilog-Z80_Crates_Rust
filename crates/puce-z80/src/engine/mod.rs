@@ -75,6 +75,7 @@ impl Engine {
     }
 }
 
+pub(crate) mod addr;
 pub mod decode;
 pub mod mcycle;
 pub mod plan;
