@@ -76,4 +76,5 @@ impl Engine {
 }
 
 pub mod decode;
+pub mod mcycle;
 pub mod plan;
