@@ -99,6 +99,86 @@ pub fn write_pins(addr: u16, data: u8, t: u8) -> Pins {
     }
 }
 
+/// Compute the output pins for an I/O read cycle (N4).
+///
+/// # Arguments
+/// * `addr` - Port address
+/// * `t` - T-state index within the cycle (0..3)
+///
+/// # Returns
+/// Pin state for this T-state.
+pub fn io_read_pins(addr: u16, t: u8) -> Pins {
+    match t {
+        0 | 1 => {
+            // T0/T1: address only, no control signals
+            Pins(0).set_addr(addr)
+        }
+        2 => {
+            // T2: A + IORQ + RD (WAIT sampled here, 1 TW automatic)
+            Pins(0).set_addr(addr).with(Pins::IORQ | Pins::RD)
+        }
+        _ => {
+            // T3 and beyond: address only, data latched at end of T2/TW
+            Pins(0).set_addr(addr)
+        }
+    }
+}
+
+/// Compute the output pins for an I/O write cycle (O4).
+///
+/// # Arguments
+/// * `addr` - Port address
+/// * `data` - Data byte to write
+/// * `t` - T-state index within the cycle (0..3)
+///
+/// # Returns
+/// Pin state for this T-state.
+pub fn io_write_pins(addr: u16, data: u8, t: u8) -> Pins {
+    match t {
+        0 | 1 => {
+            // T0/T1: address + data, no control signals
+            Pins(0).set_addr(addr).set_data(data)
+        }
+        2 => {
+            // T2: A + D + IORQ + WR (WAIT sampled here, 1 TW automatic)
+            Pins(0).set_addr(addr).set_data(data).with(Pins::IORQ | Pins::WR)
+        }
+        _ => {
+            // T3 and beyond: address + data maintained, no control signals
+            Pins(0).set_addr(addr).set_data(data)
+        }
+    }
+}
+
+/// Compute the output pins for an interrupt acknowledge cycle.
+///
+/// UNKNOWN - to confirm: exact sequence calibrated in E09/E13 on FUSE;
+/// this implements the simple version (M1+IORQ from t2 through t5, then
+/// no control signals at t6).
+///
+/// # Arguments
+/// * `pc` - Program counter value (address held during cycle)
+/// * `t` - T-state index within the cycle (0..6)
+///
+/// # Returns
+/// Pin state for this T-state.
+pub fn int_ack_pins(pc: u16, t: u8) -> Pins {
+    match t {
+        0 | 1 => {
+            // T0/T1: A=PC, M1 only (like first two T-states of F4)
+            Pins(0).set_addr(pc).with(Pins::M1)
+        }
+        2 | 3 | 4 | 5 => {
+            // T2..T5: A=PC, M1 + IORQ (TW states with IORQ active)
+            Pins(0).set_addr(pc).with(Pins::M1 | Pins::IORQ)
+        }
+        _ => {
+            // T6 and beyond: address only, no control signals
+            Pins(0).set_addr(pc)
+        }
+    }
+}
+
 /// Compute the output pins for an internal cycle (I<n>).
 ///
 /// Internal cycles have no bus activity - only the address is held.
@@ -250,5 +330,67 @@ mod tests {
         assert!(!p.has(Pins::MREQ));
         assert!(!p.has(Pins::RD));
         assert!(!p.has(Pins::WR));
+    }
+
+    #[test]
+    fn e03_04_in_t2() {
+        // N4 T2: IORQ and RD active, no MREQ
+        let p = io_read_pins(0x80, 2);
+        assert_eq!(p.addr(), 0x80);
+        assert!(p.has(Pins::IORQ));
+        assert!(p.has(Pins::RD));
+        assert!(!p.has(Pins::MREQ));
+    }
+
+    #[test]
+    fn e03_04_in_t0_t1() {
+        // N4 T0 and T1: address only, no control signals
+        for t in [0u8, 1] {
+            let p = io_read_pins(0x80, t);
+            assert_eq!(p.addr(), 0x80);
+            assert!(!p.has(Pins::IORQ));
+            assert!(!p.has(Pins::RD));
+            assert!(!p.has(Pins::MREQ));
+        }
+    }
+
+    #[test]
+    fn e03_04_out_t2() {
+        // O4 T2: IORQ and WR active with data, no MREQ
+        let p = io_write_pins(0x90, 0xAB, 2);
+        assert_eq!(p.addr(), 0x90);
+        assert_eq!(p.data(), 0xAB);
+        assert!(p.has(Pins::IORQ));
+        assert!(p.has(Pins::WR));
+        assert!(!p.has(Pins::MREQ));
+    }
+
+    #[test]
+    fn e03_04_out_t0() {
+        // O4 T0: address and data, no control signals
+        let p = io_write_pins(0x90, 0xAB, 0);
+        assert_eq!(p.addr(), 0x90);
+        assert_eq!(p.data(), 0xAB);
+        assert!(!p.has(Pins::IORQ));
+        assert!(!p.has(Pins::WR));
+    }
+
+    #[test]
+    fn e03_04_ack_has_m1_iorq() {
+        // Interrupt acknowledge T2: M1 and IORQ active, no MREQ
+        let p = int_ack_pins(0x5000, 2);
+        assert_eq!(p.addr(), 0x5000);
+        assert!(p.has(Pins::M1));
+        assert!(p.has(Pins::IORQ));
+        assert!(!p.has(Pins::MREQ));
+    }
+
+    #[test]
+    fn e03_04_ack_first_t() {
+        // Interrupt acknowledge T0: M1 only, no IORQ yet
+        let p = int_ack_pins(0x5000, 0);
+        assert_eq!(p.addr(), 0x5000);
+        assert!(p.has(Pins::M1));
+        assert!(!p.has(Pins::IORQ));
     }
 }
