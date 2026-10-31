@@ -3,6 +3,12 @@ name = "puce-z80"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
+keywords = ["z80", "zilog", "emulator", "cpu", "no-std"]
+categories = ["emulators", "no-std", "hardware-support"]
 description = "Cycle-accurate Zilog Z80 CPU emulator core (no_std, no alloc, no unsafe)"
 
 [features]

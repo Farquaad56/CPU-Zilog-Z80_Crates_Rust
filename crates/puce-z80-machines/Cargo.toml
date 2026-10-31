@@ -3,6 +3,9 @@ name = "puce-z80-machines"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
 description = "Test machines (CP/M, ZX Spectrum) and simulation session for Z80 emulator"
 
 [dependencies]

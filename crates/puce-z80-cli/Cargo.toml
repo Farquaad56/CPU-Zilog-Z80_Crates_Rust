@@ -3,6 +3,9 @@ name = "puce-z80-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
 description = "Z80 emulator CLI tool (run, cpm, suite, ssc, fuse, z80test, disasm, fetch)"
 
 [[bin]]
