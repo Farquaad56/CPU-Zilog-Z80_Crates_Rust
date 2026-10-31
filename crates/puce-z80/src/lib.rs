@@ -16,6 +16,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub use pins::Pins;
 pub use regs::Regs;
+pub use cpu::Cpu;
 
 // Module declarations - uncommented as each is implemented in subsequent tasks.
 // Execution engine (decode, plan, mcycle).
@@ -24,6 +25,8 @@ pub(crate) mod engine;
 pub mod pins;
 // Register file and flag constants.
 pub mod regs;
+// CPU top-level struct and tick interface.
+pub mod cpu;
 // Generated opcode decode tables.
 pub(crate) mod tables;
 // Planned modules (enable in the task that implements them):

@@ -123,6 +123,10 @@ impl Tok {
 /// A plan is a static slice of tokens describing an instruction's execution.
 pub type Plan = &'static [Tok];
 
+/// Standard opcode fetch probe token (F4). Used by the engine to detect
+/// when it should begin decoding the next instruction.
+pub(crate) const FETCH_PROBE: Tok = Tok::new(Kind::F, 4, Addr::PcInc, Reg::None, false);
+
 /// Compute the minimum T-state count for a plan (conditional tokens skipped).
 /// Hook tokens (Kind::X) contribute 0 T-states regardless of their len field.
 pub fn plan_t_min(p: Plan) -> u32 {
