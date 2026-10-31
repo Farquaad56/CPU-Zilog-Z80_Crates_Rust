@@ -14,9 +14,9 @@ extern crate std;
 /// Crate version string (from Cargo.toml).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+pub use cpu::Cpu;
 pub use pins::Pins;
 pub use regs::Regs;
-pub use cpu::Cpu;
 
 // Module declarations - uncommented as each is implemented in subsequent tasks.
 // Execution engine (decode, plan, mcycle).
@@ -27,6 +27,8 @@ pub mod pins;
 pub mod regs;
 // CPU top-level struct and tick interface.
 pub mod cpu;
+// Instruction semantics dispatch (stub, filled by E05+).
+pub(crate) mod sem;
 // Generated opcode decode tables.
 pub(crate) mod tables;
 // Planned modules (enable in the task that implements them):

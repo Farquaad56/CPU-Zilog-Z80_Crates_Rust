@@ -1,5 +1,8 @@
 //! Execution engine state and tick logic.
 
+// Temporary: engine items are consumed progressively by later tasks (E03-09+).
+#![allow(dead_code)]
+
 use crate::engine::decode::{Prefix, Table};
 use crate::engine::plan::{Plan, Reg};
 use crate::regs::Regs;
@@ -46,6 +49,8 @@ pub(crate) struct Engine {
     pub ts: u32,
     /// Total WAIT T-states inserted during the current instruction.
     pub ts_wait: u32,
+    /// Current bus address for the active token (set at t0 of each bus cycle).
+    pub cur_addr: u16,
 }
 
 impl Engine {
@@ -72,6 +77,7 @@ impl Engine {
             restart_cost: 0,
             ts: 0,
             ts_wait: 0,
+            cur_addr: 0,
         }
     }
 
