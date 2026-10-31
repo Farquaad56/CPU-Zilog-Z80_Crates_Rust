@@ -43,13 +43,7 @@ pub(crate) fn resolve(cpu: &mut Cpu, a: Addr, port: bool) -> u16 {
         }
 
         Addr::Hl => cpu.regs.hl(),
-        Addr::Bc => {
-            if port {
-                cpu.regs.bc()
-            } else {
-                cpu.regs.bc()
-            }
-        }
+        Addr::Bc => cpu.regs.bc(),
         Addr::De => cpu.regs.de(),
 
         Addr::Nn => cpu.regs.wz,

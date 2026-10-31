@@ -17,7 +17,7 @@ use crate::pins::Pins;
 ///
 /// # Returns
 /// Pin state for this T-state.
-pub fn fetch_pins(pc: u16, i: u8, r: u8, t: u8, len: u8, halt: bool) -> Pins {
+pub fn fetch_pins(pc: u16, i: u8, r: u8, t: u8, _len: u8, halt: bool) -> Pins {
     let mut pins = Pins(0);
 
     match t {
@@ -90,7 +90,10 @@ pub fn write_pins(addr: u16, data: u8, t: u8) -> Pins {
         }
         1 => {
             // T1: A + D + MREQ + WR (data written to memory)
-            Pins(0).set_addr(addr).set_data(data).with(Pins::MREQ | Pins::WR)
+            Pins(0)
+                .set_addr(addr)
+                .set_data(data)
+                .with(Pins::MREQ | Pins::WR)
         }
         _ => {
             // T2 and beyond: A + D, no control signals
@@ -141,7 +144,10 @@ pub fn io_write_pins(addr: u16, data: u8, t: u8) -> Pins {
         }
         2 => {
             // T2: A + D + IORQ + WR (WAIT sampled here, 1 TW automatic)
-            Pins(0).set_addr(addr).set_data(data).with(Pins::IORQ | Pins::WR)
+            Pins(0)
+                .set_addr(addr)
+                .set_data(data)
+                .with(Pins::IORQ | Pins::WR)
         }
         _ => {
             // T3 and beyond: address + data maintained, no control signals
@@ -168,7 +174,7 @@ pub fn int_ack_pins(pc: u16, t: u8) -> Pins {
             // T0/T1: A=PC, M1 only (like first two T-states of F4)
             Pins(0).set_addr(pc).with(Pins::M1)
         }
-        2 | 3 | 4 | 5 => {
+        2..=5 => {
             // T2..T5: A=PC, M1 + IORQ (TW states with IORQ active)
             Pins(0).set_addr(pc).with(Pins::M1 | Pins::IORQ)
         }
