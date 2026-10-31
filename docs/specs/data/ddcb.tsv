@@ -1,0 +1,257 @@
+opcode	mnemonic	family	plan	t_min	t_max
+00	RLC (IX+d),B	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+01	RLC (IX+d),C	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+02	RLC (IX+d),D	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+03	RLC (IX+d),E	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+04	RLC (IX+d),H	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+05	RLC (IX+d),L	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+06	RLC (IX+d)	ddcb_rot	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+07	RLC (IX+d),A	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+08	RRC (IX+d),B	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+09	RRC (IX+d),C	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+0A	RRC (IX+d),D	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+0B	RRC (IX+d),E	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+0C	RRC (IX+d),H	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+0D	RRC (IX+d),L	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+0E	RRC (IX+d)	ddcb_rot	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+0F	RRC (IX+d),A	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+10	RL (IX+d),B	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+11	RL (IX+d),C	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+12	RL (IX+d),D	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+13	RL (IX+d),E	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+14	RL (IX+d),H	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+15	RL (IX+d),L	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+16	RL (IX+d)	ddcb_rot	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+17	RL (IX+d),A	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+18	RR (IX+d),B	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+19	RR (IX+d),C	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+1A	RR (IX+d),D	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+1B	RR (IX+d),E	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+1C	RR (IX+d),H	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+1D	RR (IX+d),L	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+1E	RR (IX+d)	ddcb_rot	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+1F	RR (IX+d),A	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+20	SLA (IX+d),B	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+21	SLA (IX+d),C	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+22	SLA (IX+d),D	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+23	SLA (IX+d),E	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+24	SLA (IX+d),H	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+25	SLA (IX+d),L	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+26	SLA (IX+d)	ddcb_rot	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+27	SLA (IX+d),A	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+28	SRA (IX+d),B	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+29	SRA (IX+d),C	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+2A	SRA (IX+d),D	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+2B	SRA (IX+d),E	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+2C	SRA (IX+d),H	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+2D	SRA (IX+d),L	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+2E	SRA (IX+d)	ddcb_rot	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+2F	SRA (IX+d),A	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+30	SLL (IX+d),B	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+31	SLL (IX+d),C	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+32	SLL (IX+d),D	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+33	SLL (IX+d),E	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+34	SLL (IX+d),H	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+35	SLL (IX+d),L	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+36	SLL (IX+d)	ddcb_rot	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+37	SLL (IX+d),A	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+38	SRL (IX+d),B	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+39	SRL (IX+d),C	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+3A	SRL (IX+d),D	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+3B	SRL (IX+d),E	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+3C	SRL (IX+d),H	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+3D	SRL (IX+d),L	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+3E	SRL (IX+d)	ddcb_rot	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+3F	SRL (IX+d),A	ddcb_rot_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+40	BIT 0,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+41	BIT 0,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+42	BIT 0,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+43	BIT 0,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+44	BIT 0,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+45	BIT 0,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+46	BIT 0,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+47	BIT 0,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+48	BIT 1,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+49	BIT 1,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+4A	BIT 1,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+4B	BIT 1,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+4C	BIT 1,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+4D	BIT 1,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+4E	BIT 1,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+4F	BIT 1,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+50	BIT 2,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+51	BIT 2,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+52	BIT 2,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+53	BIT 2,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+54	BIT 2,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+55	BIT 2,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+56	BIT 2,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+57	BIT 2,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+58	BIT 3,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+59	BIT 3,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+5A	BIT 3,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+5B	BIT 3,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+5C	BIT 3,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+5D	BIT 3,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+5E	BIT 3,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+5F	BIT 3,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+60	BIT 4,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+61	BIT 4,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+62	BIT 4,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+63	BIT 4,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+64	BIT 4,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+65	BIT 4,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+66	BIT 4,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+67	BIT 4,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+68	BIT 5,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+69	BIT 5,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+6A	BIT 5,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+6B	BIT 5,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+6C	BIT 5,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+6D	BIT 5,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+6E	BIT 5,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+6F	BIT 5,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+70	BIT 6,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+71	BIT 6,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+72	BIT 6,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+73	BIT 6,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+74	BIT 6,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+75	BIT 6,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+76	BIT 6,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+77	BIT 6,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+78	BIT 7,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+79	BIT 7,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+7A	BIT 7,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+7B	BIT 7,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+7C	BIT 7,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+7D	BIT 7,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+7E	BIT 7,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+7F	BIT 7,(IX+d)	ddcb_bit	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0	20	20
+80	RES 0,(IX+d),B	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+81	RES 0,(IX+d),C	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+82	RES 0,(IX+d),D	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+83	RES 0,(IX+d),E	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+84	RES 0,(IX+d),H	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+85	RES 0,(IX+d),L	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+86	RES 0,(IX+d)	ddcb_res	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+87	RES 0,(IX+d),A	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+88	RES 1,(IX+d),B	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+89	RES 1,(IX+d),C	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+8A	RES 1,(IX+d),D	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+8B	RES 1,(IX+d),E	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+8C	RES 1,(IX+d),H	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+8D	RES 1,(IX+d),L	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+8E	RES 1,(IX+d)	ddcb_res	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+8F	RES 1,(IX+d),A	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+90	RES 2,(IX+d),B	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+91	RES 2,(IX+d),C	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+92	RES 2,(IX+d),D	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+93	RES 2,(IX+d),E	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+94	RES 2,(IX+d),H	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+95	RES 2,(IX+d),L	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+96	RES 2,(IX+d)	ddcb_res	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+97	RES 2,(IX+d),A	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+98	RES 3,(IX+d),B	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+99	RES 3,(IX+d),C	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+9A	RES 3,(IX+d),D	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+9B	RES 3,(IX+d),E	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+9C	RES 3,(IX+d),H	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+9D	RES 3,(IX+d),L	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+9E	RES 3,(IX+d)	ddcb_res	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+9F	RES 3,(IX+d),A	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+A0	RES 4,(IX+d),B	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+A1	RES 4,(IX+d),C	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+A2	RES 4,(IX+d),D	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+A3	RES 4,(IX+d),E	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+A4	RES 4,(IX+d),H	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+A5	RES 4,(IX+d),L	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+A6	RES 4,(IX+d)	ddcb_res	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+A7	RES 4,(IX+d),A	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+A8	RES 5,(IX+d),B	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+A9	RES 5,(IX+d),C	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+AA	RES 5,(IX+d),D	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+AB	RES 5,(IX+d),E	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+AC	RES 5,(IX+d),H	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+AD	RES 5,(IX+d),L	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+AE	RES 5,(IX+d)	ddcb_res	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+AF	RES 5,(IX+d),A	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+B0	RES 6,(IX+d),B	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+B1	RES 6,(IX+d),C	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+B2	RES 6,(IX+d),D	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+B3	RES 6,(IX+d),E	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+B4	RES 6,(IX+d),H	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+B5	RES 6,(IX+d),L	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+B6	RES 6,(IX+d)	ddcb_res	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+B7	RES 6,(IX+d),A	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+B8	RES 7,(IX+d),B	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+B9	RES 7,(IX+d),C	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+BA	RES 7,(IX+d),D	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+BB	RES 7,(IX+d),E	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+BC	RES 7,(IX+d),H	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+BD	RES 7,(IX+d),L	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+BE	RES 7,(IX+d)	ddcb_res	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+BF	RES 7,(IX+d),A	ddcb_res_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+C0	SET 0,(IX+d),B	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+C1	SET 0,(IX+d),C	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+C2	SET 0,(IX+d),D	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+C3	SET 0,(IX+d),E	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+C4	SET 0,(IX+d),H	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+C5	SET 0,(IX+d),L	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+C6	SET 0,(IX+d)	ddcb_set	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+C7	SET 0,(IX+d),A	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+C8	SET 1,(IX+d),B	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+C9	SET 1,(IX+d),C	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+CA	SET 1,(IX+d),D	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+CB	SET 1,(IX+d),E	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+CC	SET 1,(IX+d),H	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+CD	SET 1,(IX+d),L	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+CE	SET 1,(IX+d)	ddcb_set	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+CF	SET 1,(IX+d),A	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+D0	SET 2,(IX+d),B	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+D1	SET 2,(IX+d),C	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+D2	SET 2,(IX+d),D	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+D3	SET 2,(IX+d),E	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+D4	SET 2,(IX+d),H	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+D5	SET 2,(IX+d),L	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+D6	SET 2,(IX+d)	ddcb_set	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+D7	SET 2,(IX+d),A	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+D8	SET 3,(IX+d),B	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+D9	SET 3,(IX+d),C	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+DA	SET 3,(IX+d),D	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+DB	SET 3,(IX+d),E	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+DC	SET 3,(IX+d),H	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+DD	SET 3,(IX+d),L	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+DE	SET 3,(IX+d)	ddcb_set	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+DF	SET 3,(IX+d),A	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+E0	SET 4,(IX+d),B	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+E1	SET 4,(IX+d),C	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+E2	SET 4,(IX+d),D	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+E3	SET 4,(IX+d),E	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+E4	SET 4,(IX+d),H	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+E5	SET 4,(IX+d),L	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+E6	SET 4,(IX+d)	ddcb_set	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+E7	SET 4,(IX+d),A	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+E8	SET 5,(IX+d),B	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+E9	SET 5,(IX+d),C	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+EA	SET 5,(IX+d),D	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+EB	SET 5,(IX+d),E	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+EC	SET 5,(IX+d),H	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+ED	SET 5,(IX+d),L	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+EE	SET 5,(IX+d)	ddcb_set	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+EF	SET 5,(IX+d),A	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+F0	SET 6,(IX+d),B	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+F1	SET 6,(IX+d),C	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+F2	SET 6,(IX+d),D	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+F3	SET 6,(IX+d),E	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+F4	SET 6,(IX+d),H	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+F5	SET 6,(IX+d),L	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+F6	SET 6,(IX+d)	ddcb_set	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+F7	SET 6,(IX+d),A	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+F8	SET 7,(IX+d),B	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+F9	SET 7,(IX+d),C	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+FA	SET 7,(IX+d),D	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+FB	SET 7,(IX+d),E	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+FC	SET 7,(IX+d),H	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+FD	SET 7,(IX+d),L	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+FE	SET 7,(IX+d)	ddcb_set	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23
+FF	SET 7,(IX+d),A	ddcb_set_undoc	F4 F4 R3:PC+>D R5:PC+>OP R4:XY>L X0 W3:XY<L	23	23

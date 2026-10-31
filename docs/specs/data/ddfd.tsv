@@ -1,0 +1,257 @@
+opcode	mnemonic	family	plan	t_min	t_max
+00	(prefix ignored) NOP	ix_plain	F4 F4	8	8
+01	(prefix ignored) LD BC,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+02	(prefix ignored) LD (BC),A	ix_plain	F4 F4 X0 W3:BC<L	11	11
+03	(prefix ignored) INC BC	ix_plain	F4 F6 X0	10	10
+04	(prefix ignored) INC B	ix_plain	F4 F4 X0	8	8
+05	(prefix ignored) DEC B	ix_plain	F4 F4 X0	8	8
+06	(prefix ignored) LD B,n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+07	(prefix ignored) RLCA	ix_plain	F4 F4 X0	8	8
+08	(prefix ignored) EX AF,AF'	ix_plain	F4 F4 X0	8	8
+09	ADD IX,BC	ix_add_hl_rp	F4 F4 X0 I4 I3	15	15
+0A	(prefix ignored) LD A,(BC)	ix_plain	F4 F4 R3:BC>L X0	11	11
+0B	(prefix ignored) DEC BC	ix_plain	F4 F6 X0	10	10
+0C	(prefix ignored) INC C	ix_plain	F4 F4 X0	8	8
+0D	(prefix ignored) DEC C	ix_plain	F4 F4 X0	8	8
+0E	(prefix ignored) LD C,n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+0F	(prefix ignored) RRCA	ix_plain	F4 F4 X0	8	8
+10	(prefix ignored) DJNZ e	ix_plain	F4 F5 R3:PC+>L X0 ?I5 X1	12	17
+11	(prefix ignored) LD DE,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+12	(prefix ignored) LD (DE),A	ix_plain	F4 F4 X0 W3:DE<L	11	11
+13	(prefix ignored) INC DE	ix_plain	F4 F6 X0	10	10
+14	(prefix ignored) INC D	ix_plain	F4 F4 X0	8	8
+15	(prefix ignored) DEC D	ix_plain	F4 F4 X0	8	8
+16	(prefix ignored) LD D,n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+17	(prefix ignored) RLA	ix_plain	F4 F4 X0	8	8
+18	(prefix ignored) JR e	ix_plain	F4 F4 R3:PC+>L X0 I5 X1	16	16
+19	ADD IX,DE	ix_add_hl_rp	F4 F4 X0 I4 I3	15	15
+1A	(prefix ignored) LD A,(DE)	ix_plain	F4 F4 R3:DE>L X0	11	11
+1B	(prefix ignored) DEC DE	ix_plain	F4 F6 X0	10	10
+1C	(prefix ignored) INC E	ix_plain	F4 F4 X0	8	8
+1D	(prefix ignored) DEC E	ix_plain	F4 F4 X0	8	8
+1E	(prefix ignored) LD E,n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+1F	(prefix ignored) RRA	ix_plain	F4 F4 X0	8	8
+20	(prefix ignored) JR NZ,e	ix_plain	F4 F4 R3:PC+>L X0 ?I5 X1	11	16
+21	LD IX,nn	ix_ld_rp_nn	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+22	LD (nn),IX	ix_ld_nn_hl	F4 F4 R3:PC+>Z R3:PC+>W X0 W3:NN<L W3:NN+1<H	20	20
+23	INC IX	ix_inc_rp	F4 F6 X0	10	10
+24	INC IXH	ix_inc_r	F4 F4 X0	8	8
+25	DEC IXH	ix_dec_r	F4 F4 X0	8	8
+26	LD IXH,n	ix_ld_r_n	F4 F4 R3:PC+>L X0	11	11
+27	(prefix ignored) DAA	ix_plain	F4 F4 X0	8	8
+28	(prefix ignored) JR Z,e	ix_plain	F4 F4 R3:PC+>L X0 ?I5 X1	11	16
+29	ADD IX,IX	ix_add_hl_rp	F4 F4 X0 I4 I3	15	15
+2A	LD IX,(nn)	ix_ld_hl_nn	F4 F4 R3:PC+>Z R3:PC+>W R3:NN>L R3:NN+1>H X0	20	20
+2B	DEC IX	ix_dec_rp	F4 F6 X0	10	10
+2C	INC IXL	ix_inc_r	F4 F4 X0	8	8
+2D	DEC IXL	ix_dec_r	F4 F4 X0	8	8
+2E	LD IXL,n	ix_ld_r_n	F4 F4 R3:PC+>L X0	11	11
+2F	(prefix ignored) CPL	ix_plain	F4 F4 X0	8	8
+30	(prefix ignored) JR NC,e	ix_plain	F4 F4 R3:PC+>L X0 ?I5 X1	11	16
+31	(prefix ignored) LD SP,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+32	(prefix ignored) LD (nn),A	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0 W3:NN<L	17	17
+33	(prefix ignored) INC SP	ix_plain	F4 F6 X0	10	10
+34	INC (IX+d)	ix_inc	F4 F4 R3:PC+>D I5 R4:XY>L X0 W3:XY<L	23	23
+35	DEC (IX+d)	ix_dec	F4 F4 R3:PC+>D I5 R4:XY>L X0 W3:XY<L	23	23
+36	LD (IX+d),n	ix_ld_n	F4 F4 R3:PC+>D R5:PC+>L X0 W3:XY<L	19	19
+37	(prefix ignored) SCF	ix_plain	F4 F4 X0	8	8
+38	(prefix ignored) JR C,e	ix_plain	F4 F4 R3:PC+>L X0 ?I5 X1	11	16
+39	ADD IX,SP	ix_add_hl_rp	F4 F4 X0 I4 I3	15	15
+3A	(prefix ignored) LD A,(nn)	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W R3:NN>L X0	17	17
+3B	(prefix ignored) DEC SP	ix_plain	F4 F6 X0	10	10
+3C	(prefix ignored) INC A	ix_plain	F4 F4 X0	8	8
+3D	(prefix ignored) DEC A	ix_plain	F4 F4 X0	8	8
+3E	(prefix ignored) LD A,n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+3F	(prefix ignored) CCF	ix_plain	F4 F4 X0	8	8
+40	(prefix ignored) LD B,B	ix_plain	F4 F4 X0	8	8
+41	(prefix ignored) LD B,C	ix_plain	F4 F4 X0	8	8
+42	(prefix ignored) LD B,D	ix_plain	F4 F4 X0	8	8
+43	(prefix ignored) LD B,E	ix_plain	F4 F4 X0	8	8
+44	LD B,IXH	ix_ld_r_r	F4 F4 X0	8	8
+45	LD B,IXL	ix_ld_r_r	F4 F4 X0	8	8
+46	LD B,(IX+d)	ix_ld_r	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+47	(prefix ignored) LD B,A	ix_plain	F4 F4 X0	8	8
+48	(prefix ignored) LD C,B	ix_plain	F4 F4 X0	8	8
+49	(prefix ignored) LD C,C	ix_plain	F4 F4 X0	8	8
+4A	(prefix ignored) LD C,D	ix_plain	F4 F4 X0	8	8
+4B	(prefix ignored) LD C,E	ix_plain	F4 F4 X0	8	8
+4C	LD C,IXH	ix_ld_r_r	F4 F4 X0	8	8
+4D	LD C,IXL	ix_ld_r_r	F4 F4 X0	8	8
+4E	LD C,(IX+d)	ix_ld_r	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+4F	(prefix ignored) LD C,A	ix_plain	F4 F4 X0	8	8
+50	(prefix ignored) LD D,B	ix_plain	F4 F4 X0	8	8
+51	(prefix ignored) LD D,C	ix_plain	F4 F4 X0	8	8
+52	(prefix ignored) LD D,D	ix_plain	F4 F4 X0	8	8
+53	(prefix ignored) LD D,E	ix_plain	F4 F4 X0	8	8
+54	LD D,IXH	ix_ld_r_r	F4 F4 X0	8	8
+55	LD D,IXL	ix_ld_r_r	F4 F4 X0	8	8
+56	LD D,(IX+d)	ix_ld_r	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+57	(prefix ignored) LD D,A	ix_plain	F4 F4 X0	8	8
+58	(prefix ignored) LD E,B	ix_plain	F4 F4 X0	8	8
+59	(prefix ignored) LD E,C	ix_plain	F4 F4 X0	8	8
+5A	(prefix ignored) LD E,D	ix_plain	F4 F4 X0	8	8
+5B	(prefix ignored) LD E,E	ix_plain	F4 F4 X0	8	8
+5C	LD E,IXH	ix_ld_r_r	F4 F4 X0	8	8
+5D	LD E,IXL	ix_ld_r_r	F4 F4 X0	8	8
+5E	LD E,(IX+d)	ix_ld_r	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+5F	(prefix ignored) LD E,A	ix_plain	F4 F4 X0	8	8
+60	LD IXH,B	ix_ld_r_r	F4 F4 X0	8	8
+61	LD IXH,C	ix_ld_r_r	F4 F4 X0	8	8
+62	LD IXH,D	ix_ld_r_r	F4 F4 X0	8	8
+63	LD IXH,E	ix_ld_r_r	F4 F4 X0	8	8
+64	LD IXH,IXH	ix_ld_r_r	F4 F4 X0	8	8
+65	LD IXH,IXL	ix_ld_r_r	F4 F4 X0	8	8
+66	LD H,(IX+d)	ix_ld_r	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+67	LD IXH,A	ix_ld_r_r	F4 F4 X0	8	8
+68	LD IXL,B	ix_ld_r_r	F4 F4 X0	8	8
+69	LD IXL,C	ix_ld_r_r	F4 F4 X0	8	8
+6A	LD IXL,D	ix_ld_r_r	F4 F4 X0	8	8
+6B	LD IXL,E	ix_ld_r_r	F4 F4 X0	8	8
+6C	LD IXL,IXH	ix_ld_r_r	F4 F4 X0	8	8
+6D	LD IXL,IXL	ix_ld_r_r	F4 F4 X0	8	8
+6E	LD L,(IX+d)	ix_ld_r	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+6F	LD IXL,A	ix_ld_r_r	F4 F4 X0	8	8
+70	LD (IX+d),B	ix_ld_m	F4 F4 R3:PC+>D I5 X0 W3:XY<L	19	19
+71	LD (IX+d),C	ix_ld_m	F4 F4 R3:PC+>D I5 X0 W3:XY<L	19	19
+72	LD (IX+d),D	ix_ld_m	F4 F4 R3:PC+>D I5 X0 W3:XY<L	19	19
+73	LD (IX+d),E	ix_ld_m	F4 F4 R3:PC+>D I5 X0 W3:XY<L	19	19
+74	LD (IX+d),H	ix_ld_m	F4 F4 R3:PC+>D I5 X0 W3:XY<L	19	19
+75	LD (IX+d),L	ix_ld_m	F4 F4 R3:PC+>D I5 X0 W3:XY<L	19	19
+76	(prefix ignored) HALT	ix_plain	F4 F4 X0	8	8
+77	LD (IX+d),A	ix_ld_m	F4 F4 R3:PC+>D I5 X0 W3:XY<L	19	19
+78	(prefix ignored) LD A,B	ix_plain	F4 F4 X0	8	8
+79	(prefix ignored) LD A,C	ix_plain	F4 F4 X0	8	8
+7A	(prefix ignored) LD A,D	ix_plain	F4 F4 X0	8	8
+7B	(prefix ignored) LD A,E	ix_plain	F4 F4 X0	8	8
+7C	LD A,IXH	ix_ld_r_r	F4 F4 X0	8	8
+7D	LD A,IXL	ix_ld_r_r	F4 F4 X0	8	8
+7E	LD A,(IX+d)	ix_ld_r	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+7F	(prefix ignored) LD A,A	ix_plain	F4 F4 X0	8	8
+80	(prefix ignored) ADD A,B	ix_plain	F4 F4 X0	8	8
+81	(prefix ignored) ADD A,C	ix_plain	F4 F4 X0	8	8
+82	(prefix ignored) ADD A,D	ix_plain	F4 F4 X0	8	8
+83	(prefix ignored) ADD A,E	ix_plain	F4 F4 X0	8	8
+84	ADD A,IXH	ix_alu_r	F4 F4 X0	8	8
+85	ADD A,IXL	ix_alu_r	F4 F4 X0	8	8
+86	ADD A,(IX+d)	ix_alu	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+87	(prefix ignored) ADD A,A	ix_plain	F4 F4 X0	8	8
+88	(prefix ignored) ADC A,B	ix_plain	F4 F4 X0	8	8
+89	(prefix ignored) ADC A,C	ix_plain	F4 F4 X0	8	8
+8A	(prefix ignored) ADC A,D	ix_plain	F4 F4 X0	8	8
+8B	(prefix ignored) ADC A,E	ix_plain	F4 F4 X0	8	8
+8C	ADC A,IXH	ix_alu_r	F4 F4 X0	8	8
+8D	ADC A,IXL	ix_alu_r	F4 F4 X0	8	8
+8E	ADC A,(IX+d)	ix_alu	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+8F	(prefix ignored) ADC A,A	ix_plain	F4 F4 X0	8	8
+90	(prefix ignored) SUB B	ix_plain	F4 F4 X0	8	8
+91	(prefix ignored) SUB C	ix_plain	F4 F4 X0	8	8
+92	(prefix ignored) SUB D	ix_plain	F4 F4 X0	8	8
+93	(prefix ignored) SUB E	ix_plain	F4 F4 X0	8	8
+94	SUB IXH	ix_alu_r	F4 F4 X0	8	8
+95	SUB IXL	ix_alu_r	F4 F4 X0	8	8
+96	SUB (IX+d)	ix_alu	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+97	(prefix ignored) SUB A	ix_plain	F4 F4 X0	8	8
+98	(prefix ignored) SBC A,B	ix_plain	F4 F4 X0	8	8
+99	(prefix ignored) SBC A,C	ix_plain	F4 F4 X0	8	8
+9A	(prefix ignored) SBC A,D	ix_plain	F4 F4 X0	8	8
+9B	(prefix ignored) SBC A,E	ix_plain	F4 F4 X0	8	8
+9C	SBC A,IXH	ix_alu_r	F4 F4 X0	8	8
+9D	SBC A,IXL	ix_alu_r	F4 F4 X0	8	8
+9E	SBC A,(IX+d)	ix_alu	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+9F	(prefix ignored) SBC A,A	ix_plain	F4 F4 X0	8	8
+A0	(prefix ignored) AND B	ix_plain	F4 F4 X0	8	8
+A1	(prefix ignored) AND C	ix_plain	F4 F4 X0	8	8
+A2	(prefix ignored) AND D	ix_plain	F4 F4 X0	8	8
+A3	(prefix ignored) AND E	ix_plain	F4 F4 X0	8	8
+A4	AND IXH	ix_alu_r	F4 F4 X0	8	8
+A5	AND IXL	ix_alu_r	F4 F4 X0	8	8
+A6	AND (IX+d)	ix_alu	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+A7	(prefix ignored) AND A	ix_plain	F4 F4 X0	8	8
+A8	(prefix ignored) XOR B	ix_plain	F4 F4 X0	8	8
+A9	(prefix ignored) XOR C	ix_plain	F4 F4 X0	8	8
+AA	(prefix ignored) XOR D	ix_plain	F4 F4 X0	8	8
+AB	(prefix ignored) XOR E	ix_plain	F4 F4 X0	8	8
+AC	XOR IXH	ix_alu_r	F4 F4 X0	8	8
+AD	XOR IXL	ix_alu_r	F4 F4 X0	8	8
+AE	XOR (IX+d)	ix_alu	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+AF	(prefix ignored) XOR A	ix_plain	F4 F4 X0	8	8
+B0	(prefix ignored) OR B	ix_plain	F4 F4 X0	8	8
+B1	(prefix ignored) OR C	ix_plain	F4 F4 X0	8	8
+B2	(prefix ignored) OR D	ix_plain	F4 F4 X0	8	8
+B3	(prefix ignored) OR E	ix_plain	F4 F4 X0	8	8
+B4	OR IXH	ix_alu_r	F4 F4 X0	8	8
+B5	OR IXL	ix_alu_r	F4 F4 X0	8	8
+B6	OR (IX+d)	ix_alu	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+B7	(prefix ignored) OR A	ix_plain	F4 F4 X0	8	8
+B8	(prefix ignored) CP B	ix_plain	F4 F4 X0	8	8
+B9	(prefix ignored) CP C	ix_plain	F4 F4 X0	8	8
+BA	(prefix ignored) CP D	ix_plain	F4 F4 X0	8	8
+BB	(prefix ignored) CP E	ix_plain	F4 F4 X0	8	8
+BC	CP IXH	ix_alu_r	F4 F4 X0	8	8
+BD	CP IXL	ix_alu_r	F4 F4 X0	8	8
+BE	CP (IX+d)	ix_alu	F4 F4 R3:PC+>D I5 R3:XY>L X0	19	19
+BF	(prefix ignored) CP A	ix_plain	F4 F4 X0	8	8
+C0	(prefix ignored) RET NZ	ix_plain	F4 F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	9	15
+C1	(prefix ignored) POP BC	ix_plain	F4 F4 R3:SP+>L R3:SP+>H X0	14	14
+C2	(prefix ignored) JP NZ,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+C3	(prefix ignored) JP nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+C4	(prefix ignored) CALL NZ,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	14	21
+C5	(prefix ignored) PUSH BC	ix_plain	F4 F5 X0 W3:-SP<H W3:-SP<L	15	15
+C6	(prefix ignored) ADD A,n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+C7	(prefix ignored) RST 00H	ix_plain	F4 F5 X0 W3:-SP<H W3:-SP<L X1	15	15
+C8	(prefix ignored) RET Z	ix_plain	F4 F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	9	15
+C9	(prefix ignored) RET	ix_plain	F4 F4 R3:SP+>Z R3:SP+>W X0	14	14
+CA	(prefix ignored) JP Z,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+CB	-	-	-	0	0
+CC	(prefix ignored) CALL Z,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	14	21
+CD	(prefix ignored) CALL nn	ix_plain	F4 F4 R3:PC+>Z R4:PC+>W X0 W3:-SP<H W3:-SP<L X1	21	21
+CE	(prefix ignored) ADC A,n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+CF	(prefix ignored) RST 08H	ix_plain	F4 F5 X0 W3:-SP<H W3:-SP<L X1	15	15
+D0	(prefix ignored) RET NC	ix_plain	F4 F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	9	15
+D1	(prefix ignored) POP DE	ix_plain	F4 F4 R3:SP+>L R3:SP+>H X0	14	14
+D2	(prefix ignored) JP NC,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+D3	(prefix ignored) OUT (n),A	ix_plain	F4 F4 R3:PC+>Z X0 O4:AN<L	15	15
+D4	(prefix ignored) CALL NC,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	14	21
+D5	(prefix ignored) PUSH DE	ix_plain	F4 F5 X0 W3:-SP<H W3:-SP<L	15	15
+D6	(prefix ignored) SUB n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+D7	(prefix ignored) RST 10H	ix_plain	F4 F5 X0 W3:-SP<H W3:-SP<L X1	15	15
+D8	(prefix ignored) RET C	ix_plain	F4 F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	9	15
+D9	(prefix ignored) EXX	ix_plain	F4 F4 X0	8	8
+DA	(prefix ignored) JP C,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+DB	(prefix ignored) IN A,(n)	ix_plain	F4 F4 R3:PC+>Z N4:AN>L X0	15	15
+DC	(prefix ignored) CALL C,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	14	21
+DD	-	-	-	0	0
+DE	(prefix ignored) SBC A,n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+DF	(prefix ignored) RST 18H	ix_plain	F4 F5 X0 W3:-SP<H W3:-SP<L X1	15	15
+E0	(prefix ignored) RET PO	ix_plain	F4 F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	9	15
+E1	POP IX	ix_pop	F4 F4 R3:SP+>L R3:SP+>H X0	14	14
+E2	(prefix ignored) JP PO,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+E3	EX (SP),IX	ix_ex_sp_hl	F4 F4 R3:SP>Z R4:SP+1>W X0 W3:SP+1<H W5:SP<L X1	23	23
+E4	(prefix ignored) CALL PO,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	14	21
+E5	PUSH IX	ix_push	F4 F5 X0 W3:-SP<H W3:-SP<L	15	15
+E6	(prefix ignored) AND n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+E7	(prefix ignored) RST 20H	ix_plain	F4 F5 X0 W3:-SP<H W3:-SP<L X1	15	15
+E8	(prefix ignored) RET PE	ix_plain	F4 F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	9	15
+E9	JP (IX)	ix_jp_hl	F4 F4 X0	8	8
+EA	(prefix ignored) JP PE,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+EB	EX DE,IX	ix_ex_de_hl	F4 F4 X0	8	8
+EC	(prefix ignored) CALL PE,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	14	21
+ED	-	-	-	0	0
+EE	(prefix ignored) XOR n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+EF	(prefix ignored) RST 28H	ix_plain	F4 F5 X0 W3:-SP<H W3:-SP<L X1	15	15
+F0	(prefix ignored) RET P	ix_plain	F4 F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	9	15
+F1	(prefix ignored) POP AF	ix_plain	F4 F4 R3:SP+>L R3:SP+>H X0	14	14
+F2	(prefix ignored) JP P,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+F3	(prefix ignored) DI	ix_plain	F4 F4 X0	8	8
+F4	(prefix ignored) CALL P,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	14	21
+F5	(prefix ignored) PUSH AF	ix_plain	F4 F5 X0 W3:-SP<H W3:-SP<L	15	15
+F6	(prefix ignored) OR n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+F7	(prefix ignored) RST 30H	ix_plain	F4 F5 X0 W3:-SP<H W3:-SP<L X1	15	15
+F8	(prefix ignored) RET M	ix_plain	F4 F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	9	15
+F9	LD SP,IX	ix_ld_sp_hl	F4 F6 X0	10	10
+FA	(prefix ignored) JP M,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0	14	14
+FB	(prefix ignored) EI	ix_plain	F4 F4 X0	8	8
+FC	(prefix ignored) CALL M,nn	ix_plain	F4 F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	14	21
+FD	-	-	-	0	0
+FE	(prefix ignored) CP n	ix_plain	F4 F4 R3:PC+>L X0	11	11
+FF	(prefix ignored) RST 38H	ix_plain	F4 F5 X0 W3:-SP<H W3:-SP<L X1	15	15

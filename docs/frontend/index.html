@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zilog Z80 Emulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+tailwind.config = {
+  theme: { extend: {
+    fontFamily: { display: ['Orbitron','Rajdhani','sans-serif'], ui: ['Rajdhani','system-ui','sans-serif'], mono: ['"Share Tech Mono"','ui-monospace','monospace'] },
+    colors: { ink:'#07060f', panel:'#0c0a1d', line:'#2b2258', cy:'#00f0ff', pk:'#ff2bd6', ye:'#fcee0a', lm:'#39ff88', rd:'#ff3860', vi:'#8b5cff' }
+  } }
+};
+</script>
+<style>
+/* Concept : pont de commande cyberpunk, 3 colonnes de panneaux à coins coupés, bordure dégradée cyan → magenta.
+   Cyan = structure, magenta = ce qui change, jaune = PC / valeur courante. Thème unique (néon sur nuit). */
+:root{
+  --bg:#07060f; --panel:#0c0a1d; --panel2:#120f2b; --line:#2b2258;
+  --cy:#00f0ff; --pk:#ff2bd6; --ye:#fcee0a; --lm:#39ff88; --rd:#ff3860; --vi:#8b5cff;
+  --fg:#d8e4ff; --dim:#6f77a8; --off:#1a1640;
+  color-scheme: dark;
+}
+html,body{background:var(--bg); overflow:hidden;}
+#stage{position:absolute; width:2560px; height:1440px; transform-origin:0 0; left:0; top:0;}
+.fill{flex:1 1 0; min-height:0; display:flex;}
+.fill > .in{display:flex; flex-direction:column; flex:1; min-height:0; height:auto;}
+body{
+  margin:0; color:var(--fg); font-family:'Rajdhani',system-ui,sans-serif; font-size:15px;
+  position:fixed; inset:0; overflow:hidden;
+  background:
+    radial-gradient(900px 500px at 8% -5%, rgba(255,43,214,.16), transparent 60%),
+    radial-gradient(900px 600px at 100% 0%, rgba(0,240,255,.13), transparent 60%),
+    linear-gradient(rgba(139,92,255,.06) 1px, transparent 1px) 0 0/100% 34px,
+    linear-gradient(90deg, rgba(139,92,255,.06) 1px, transparent 1px) 0 0/34px 100%,
+    var(--bg);
+  background-attachment: fixed;
+}
+body::after{ /* lignes de balayage CRT */
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:50;
+  background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 3px, rgba(0,0,0,.14) 3px 4px);
+  mix-blend-mode:multiply;
+}
+.mono{font-family:'Share Tech Mono',ui-monospace,monospace;}
+.disp{font-family:'Orbitron','Rajdhani',sans-serif;}
+
+/* panneaux */
+.panel{
+  --n:14px; position:relative; padding:1px; min-width:0;
+  background:linear-gradient(135deg, var(--cy), var(--vi) 55%, var(--pk));
+  clip-path:polygon(0 0, calc(100% - var(--n)) 0, 100% var(--n), 100% 100%, var(--n) 100%, 0 calc(100% - var(--n)));
+  filter:drop-shadow(0 0 10px rgba(0,240,255,.18));
+}
+.panel > .in{
+  background:linear-gradient(180deg, var(--panel2), var(--panel) 70%); height:100%;
+  clip-path:polygon(0 0, calc(100% - var(--n)) 0, 100% var(--n), 100% 100%, var(--n) 100%, 0 calc(100% - var(--n)));
+  padding:12px 14px 14px; min-width:0;
+}
+.ptitle{
+  font-family:'Orbitron',sans-serif; font-weight:700; font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--cy); text-shadow:0 0 8px rgba(0,240,255,.7); display:flex; align-items:center; gap:8px; margin-bottom:10px;
+}
+.ptitle::before{content:""; width:8px; height:8px; background:var(--pk); box-shadow:0 0 8px var(--pk); transform:rotate(45deg);}
+.ptitle .sub{margin-left:auto; font-family:'Share Tech Mono',monospace; letter-spacing:.04em; color:var(--dim); text-shadow:none; font-weight:400; text-transform:none; font-size:12px;}
+
+.lbl{font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.14em; font-size:12px; color:var(--cy); text-transform:uppercase;}
+.hx{font-family:'Share Tech Mono',monospace; color:#fff; text-shadow:0 0 6px rgba(0,240,255,.55); font-variant-numeric:tabular-nums;}
+.dim{color:var(--dim);}
+
+/* LEDs binaires */
+.leds{display:inline-flex; gap:2px; vertical-align:middle;}
+.leds i{width:9px; height:9px; background:var(--off); border:1px solid #2a2460; display:block;}
+.leds i.on{background:var(--cy); border-color:var(--cy); box-shadow:0 0 6px var(--cy);}
+.leds.pk i.on{background:var(--pk); border-color:var(--pk); box-shadow:0 0 6px var(--pk);}
+.leds.ye i.on{background:var(--ye); border-color:var(--ye); box-shadow:0 0 6px var(--ye);}
+.leds.lm i.on{background:var(--lm); border-color:var(--lm); box-shadow:0 0 6px var(--lm);}
+.leds.sm i{width:8px; height:8px;}
+.leds i.na{opacity:.22;}
+.leds i:nth-child(4n){margin-right:3px;}
+.leds i:last-child{margin-right:0;}
+
+/* cartes registres */
+.regcard{background:rgba(0,240,255,.035); border:1px solid rgba(0,240,255,.22); padding:8px 10px 8px; min-width:0;}
+.regcard .big{font-size:26px; line-height:1.05; letter-spacing:.04em;}
+.byterow{display:flex; align-items:center; gap:8px; font-size:14px; margin-top:4px;}
+.byterow b{color:var(--pk); font-family:'Rajdhani'; width:12px; font-size:13px;}
+.chip{display:flex; flex-direction:column; gap:1px; padding:5px 8px; border:1px solid rgba(139,92,255,.35); background:rgba(139,92,255,.06); min-width:0;}
+.chip .k{font-size:11px; letter-spacing:.14em; font-weight:700; color:var(--vi); text-transform:uppercase;}
+.chip .v{font-size:16px;}
+.chip.pc{border-color:var(--ye); background:rgba(252,238,10,.07); box-shadow:0 0 12px rgba(252,238,10,.18) inset;}
+.chip.pc .k{color:var(--ye);} .chip.pc .v{color:var(--ye); text-shadow:0 0 8px rgba(252,238,10,.7);}
+
+@keyframes chgA{0%{color:var(--pk); text-shadow:0 0 14px var(--pk); transform:scale(1.06);}100%{}}
+@keyframes chgB{0%{color:var(--pk); text-shadow:0 0 14px var(--pk); transform:scale(1.06);}100%{}}
+.chgA{animation:chgA .7s ease-out; display:inline-block;}
+.chgB{animation:chgB .7s ease-out; display:inline-block;}
+
+/* flags */
+.flag{display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 0 5px; border:1px solid #2b2663; background:var(--off); color:var(--dim);}
+.flag .l{font-family:'Orbitron'; font-weight:700; font-size:15px;}
+.flag .n{font-size:9px; letter-spacing:.04em; text-transform:uppercase; text-align:center; line-height:1.05; min-height:22px; display:flex; align-items:center;}
+.flag.on{color:#001418; background:var(--cy); border-color:var(--cy); box-shadow:0 0 14px rgba(0,240,255,.7);}
+.flag.on.und{background:var(--vi); border-color:var(--vi); box-shadow:0 0 14px rgba(139,92,255,.7); color:#fff;}
+.flag.und{opacity:.85;}
+
+/* décodeur */
+.bytebox{padding:3px 8px; border:1px solid; font-family:'Share Tech Mono'; font-size:20px;}
+.bb-pre{color:var(--pk); border-color:var(--pk); text-shadow:0 0 8px var(--pk);}
+.bb-op{color:var(--cy); border-color:var(--cy); text-shadow:0 0 8px var(--cy);}
+.bb-arg{color:var(--ye); border-color:rgba(252,238,10,.6); text-shadow:0 0 8px rgba(252,238,10,.6);}
+.mnem{font-family:'Orbitron'; font-weight:700; font-size:22px; letter-spacing:.04em; color:#fff; text-shadow:0 0 12px rgba(255,43,214,.8), 0 0 2px #fff; overflow-wrap:anywhere;}
+.bitf{display:inline-flex; flex-direction:column; align-items:center; gap:2px;}
+.bitf .cells{display:flex; gap:2px;}
+.bitf .cells span{width:20px; height:24px; display:grid; place-items:center; font-family:'Share Tech Mono'; font-size:15px; border:1px solid;}
+.bitf .cap{font-size:11px; letter-spacing:.14em; font-weight:700;}
+.f-x{color:var(--vi);border-color:var(--vi);} .f-y{color:var(--cy);border-color:var(--cy);} .f-z{color:var(--pk);border-color:var(--pk);}
+.bitf .cells span.s1{background:currentColor;} .bitf .cells span.s1{color:#06040f;}
+.bitf.f-x .cells span.s1{background:var(--vi);} .bitf.f-y .cells span.s1{background:var(--cy);} .bitf.f-z .cells span.s1{background:var(--pk);}
+
+/* ALU */
+.alurow{display:grid; grid-template-columns:44px 52px 1fr; align-items:center; gap:8px; padding:3px 0;}
+.alurow .nm{color:var(--cy); font-weight:700; letter-spacing:.1em; font-size:13px;}
+.alurow .sym{color:var(--pk); font-family:'Orbitron'; margin-right:4px;}
+.aluline{height:1px; background:linear-gradient(90deg, var(--cy), var(--pk)); box-shadow:0 0 8px var(--cy); margin:4px 0;}
+.fmini{display:inline-flex; gap:2px;}
+.fmini span{width:20px; text-align:center; font-family:'Share Tech Mono'; font-size:14px; border:1px solid #2b2663; color:#4a4585; padding:1px 0;}
+.fmini span.on{color:var(--cy); border-color:var(--cy); text-shadow:0 0 6px var(--cy);}
+.fmini span.chg{border-color:var(--pk); box-shadow:0 0 8px var(--pk); color:var(--pk);}
+.fmini span.on.chg{color:#fff; background:rgba(255,43,214,.35);}
+
+/* bus */
+.sig{padding:2px 8px; font-family:'Orbitron'; font-size:10px; letter-spacing:.12em; border:1px solid #2b2663; color:#4a4585; font-weight:700;}
+.sig.on{color:#04120a; background:var(--lm); border-color:var(--lm); box-shadow:0 0 10px var(--lm);}
+.sig.on.w{background:var(--pk); border-color:var(--pk); box-shadow:0 0 10px var(--pk); color:#fff;}
+
+/* listes */
+.row{display:grid; align-items:center; gap:10px; padding:2px 6px; font-family:'Share Tech Mono'; font-size:14px; line-height:22px; border-left:2px solid transparent; white-space:nowrap;}
+.dis{grid-template-columns:14px 52px 92px 1fr; cursor:pointer;}
+.dis:hover{background:rgba(0,240,255,.07);}
+.dis.cur{background:linear-gradient(90deg, rgba(252,238,10,.18), transparent); border-left-color:var(--ye);}
+.dis .bp{width:9px; height:9px; border-radius:50%; border:1px solid #3b3480;}
+.dis.hasbp .bp{background:var(--rd); border-color:var(--rd); box-shadow:0 0 8px var(--rd);}
+.dis .a{color:var(--dim);} .dis.cur .a{color:var(--ye);}
+.dis .b{color:#7f86c4; overflow:hidden; text-overflow:ellipsis;}
+.dis .t{color:#fff; overflow:hidden; text-overflow:ellipsis;}
+.trc{grid-template-columns:34px 52px 1fr 26px;}
+.trc .a{color:var(--pk);} .trc .t{color:#c5d2ff; overflow:hidden; text-overflow:ellipsis;} .trc .c{color:var(--dim); text-align:right;}
+
+/* mémoire */
+.memwrap{overflow-x:auto;}
+.memgrid{display:grid; grid-template-columns:5ch repeat(16, 2.6ch) 17ch; column-gap:.5ch; font-family:'Share Tech Mono'; font-size:13px; line-height:1.55; width:max-content; min-width:100%;}
+.memgrid span{padding:0 1px;}
+.memgrid .ad{color:var(--dim);} .memgrid .hd{color:var(--cy); font-weight:700;}
+.memgrid .asc{color:#7f86c4; letter-spacing:.02em; white-space:pre;}
+.mc{color:#a6b2e8; text-align:center;}
+.mc.z{color:#3a3578;}
+.mc.pc{background:var(--ye); color:#000; box-shadow:0 0 10px var(--ye);}
+.mc.sp{background:var(--pk); color:#fff; box-shadow:0 0 10px var(--pk);}
+.mc.hl{outline:1px solid var(--cy); color:#fff;}
+.mc.wr{color:var(--pk); text-shadow:0 0 8px var(--pk);}
+.mc.pg{color:var(--cy);}
+
+/* puce Z80 */
+.cpu{flex:none; height:748px; display:grid; grid-template-columns:1fr 190px 1fr; align-items:stretch; background:#03020a; border:1px solid rgba(0,240,255,.25); padding:14px 10px;}
+.pins{display:grid; grid-template-rows:repeat(18,1fr); min-height:0;}
+.pin{display:flex; align-items:center; gap:0; font-family:'Share Tech Mono'; font-size:16px; color:#b9c4f5;}
+.pin.l{justify-content:flex-end;} .pin.r{justify-content:flex-start;}
+.pin .pn{padding:0 8px;} .pin.ctl .pn{color:#fff;}
+.pin .sq{width:26px; height:16px; background:#14123a; border:1px solid #3b3480; display:block;}
+.pin.on .sq{background:var(--lm); border-color:var(--lm); box-shadow:0 0 12px var(--lm);}
+.pin.on .pn{color:var(--lm); text-shadow:0 0 8px var(--lm);}
+.pin.wr.on .sq{background:var(--pk); border-color:var(--pk); box-shadow:0 0 12px var(--pk);} .pin.wr.on .pn{color:var(--pk); text-shadow:0 0 8px var(--pk);}
+.pin.hl.on .sq{background:var(--ye); border-color:var(--ye); box-shadow:0 0 12px var(--ye);} .pin.hl.on .pn{color:var(--ye); text-shadow:0 0 8px var(--ye);}
+.chipbody{margin:0; border:2px solid var(--cy); background:linear-gradient(180deg,#0b0a22,#05040f); box-shadow:0 0 22px rgba(0,240,255,.35), inset 0 0 30px rgba(139,92,255,.18); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; position:relative;}
+.chipbody::before{content:""; position:absolute; top:-1px; left:50%; width:30px; height:15px; margin-left:-15px; border:2px solid var(--cy); border-top:0; border-radius:0 0 15px 15px; background:#03020a;}
+.chipbody .nm{font-family:'Orbitron'; font-weight:900; font-size:30px; color:#fff; letter-spacing:.08em; text-shadow:0 0 14px rgba(255,43,214,.9);}
+.chipbody .nm2{font-family:'Orbitron'; font-weight:700; font-size:18px; letter-spacing:.3em; color:var(--cy); text-shadow:0 0 10px var(--cy);}
+.chipbody .zl{font-family:'Share Tech Mono'; font-size:12px; letter-spacing:.2em; color:var(--dim);}
+
+/* console */
+.term{background:#03020a; border:1px solid rgba(57,255,136,.3); color:var(--lm); text-shadow:0 0 6px rgba(57,255,136,.55);
+  font-family:'Share Tech Mono',monospace; font-size:13px; line-height:1.4; padding:10px 12px; flex:1; min-height:0; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; margin:0;}
+.term .cur{display:inline-block; width:8px; height:14px; background:var(--lm); vertical-align:-2px; animation:blink 1s steps(2) infinite;}
+@keyframes blink{50%{opacity:0;}}
+
+/* boutons */
+.btn{font-family:'Orbitron'; font-weight:700; font-size:11px; letter-spacing:.14em; text-transform:uppercase; padding:9px 14px; color:var(--cy);
+  background:rgba(0,240,255,.06); border:1px solid var(--cy); cursor:pointer; transition:.15s;
+  clip-path:polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));}
+.btn:hover{background:var(--cy); color:#001418; box-shadow:0 0 18px var(--cy);}
+.btn:focus-visible,.rom:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ye); outline-offset:2px;}
+.btn.pk{color:var(--pk); border-color:var(--pk); background:rgba(255,43,214,.07);} .btn.pk:hover{background:var(--pk); color:#fff; box-shadow:0 0 18px var(--pk);}
+.btn.ye{color:var(--ye); border-color:var(--ye); background:rgba(252,238,10,.07);} .btn.ye:hover{background:var(--ye); color:#000; box-shadow:0 0 18px var(--ye);}
+.btn.active{background:var(--pk); color:#fff; border-color:var(--pk); box-shadow:0 0 18px var(--pk);}
+.btn.sm{padding:5px 9px; font-size:10px;}
+.rom{font-family:'Orbitron'; font-size:12px; font-weight:700; letter-spacing:.1em; padding:8px 12px; border:1px solid #3b3480; color:#a6b2e8; background:var(--off); cursor:pointer; transition:.15s;}
+.rom:hover{border-color:var(--cy); color:#fff;}
+.rom.sel{border-color:var(--ye); color:var(--ye); background:rgba(252,238,10,.08); box-shadow:0 0 14px rgba(252,238,10,.3);}
+input[type=text], select{background:#05040f; color:var(--fg); border:1px solid #3b3480; font-family:'Share Tech Mono'; font-size:14px; padding:5px 8px; min-width:0;}
+input[type=range]{accent-color:var(--pk); width:100%;}
+.badge{font-family:'Orbitron'; font-weight:700; font-size:11px; letter-spacing:.2em; padding:5px 12px; border:1px solid; text-transform:uppercase;}
+.b-idle{color:var(--dim); border-color:#3b3480;}
+.b-run{color:var(--lm); border-color:var(--lm); box-shadow:0 0 14px rgba(57,255,136,.5); text-shadow:0 0 8px var(--lm);}
+.b-halt{color:var(--ye); border-color:var(--ye); box-shadow:0 0 14px rgba(252,238,10,.5);}
+.b-done{color:var(--cy); border-color:var(--cy); box-shadow:0 0 14px rgba(0,240,255,.5);}
+.b-bp{color:var(--rd); border-color:var(--rd); box-shadow:0 0 14px rgba(255,56,96,.6);}
+
+.title{font-family:'Orbitron'; font-weight:900; letter-spacing:.06em; line-height:1;
+  text-shadow:2px 0 var(--pk), -2px 0 var(--cy), 0 0 22px rgba(255,43,214,.45);}
+@keyframes flick{0%,92%,100%{opacity:1;}93%{opacity:.55;}94%{opacity:1;}96%{opacity:.7;}97%{opacity:1;}}
+.title{animation:flick 7s infinite;}
+.bar{height:8px; background:var(--off); border:1px solid #3b3480; overflow:hidden;}
+.bar > div{height:100%; width:0; background:linear-gradient(90deg,var(--cy),var(--pk)); box-shadow:0 0 12px var(--pk); transition:width .3s;}
+.drop{outline:2px dashed var(--ye); outline-offset:-8px;}
+::-webkit-scrollbar{width:9px; height:9px;} ::-webkit-scrollbar-thumb{background:#3b3480;} ::-webkit-scrollbar-track{background:#05040f;}
+@media (prefers-reduced-motion: reduce){ .title,.term .cur{animation:none;} .chgA,.chgB{animation:none;} .btn,.rom{transition:none;} }
+</style>
+
+<div id="stage">
+ <div class="flex flex-col gap-[14px] h-full p-5">
+  <!-- ===== EN-TÊTE ===== -->
+  <header class="flex gap-4 items-stretch h-[132px] shrink-0">
+    <div class="w-[600px] shrink-0 flex flex-col justify-between py-1">
+      <div class="flex items-center justify-between">
+        <div class="mono text-[12px] tracking-[.3em] text-vi uppercase">Zilog · 8 bits · CPU Rust cycle par cycle <span id="crateInfo" class="text-cy"></span></div>
+        <div class="flex gap-1" id="langBar" role="group" aria-label="Langue / Language"><button class="btn sm" type="button" data-l="fr">FR</button><button class="btn sm" type="button" data-l="en">EN</button></div>
+      </div>
+      <h1 class="title text-[42px] text-white whitespace-nowrap">Zilog <span class="text-pk">Z80</span> <span class="text-cy">Emulator</span></h1>
+      <div class="flex items-center gap-5">
+        <span id="status" class="badge b-idle">Prêt</span>
+        <div class="mono text-[13px] dim leading-tight">INSTR <span class="hx" id="sInstr">0</span><br>T-ÉTATS <span class="hx" id="sT">0</span></div>
+        <div class="mono text-[13px] dim leading-tight">VITESSE <span class="hx" id="sIps">0</span> i/s<br>ÉQUIV. <span class="hx" id="sMhz">0.00</span> MHz</div>
+      </div>
+    </div>
+    <div class="panel grow"><div class="in !py-3 flex flex-col justify-between">
+      <div class="flex items-center gap-6">
+        <div class="flex items-center gap-2" id="romBar" role="group" aria-label="ROMs de test"><span class="lbl mr-1">ROM</span></div>
+        <div class="flex items-center gap-2">
+          <button class="btn ye" id="bRun" type="button">▶ Lancer</button>
+          <button class="btn" id="bStep" type="button" title="Une instruction (touche N)">⏭ Pas</button>
+          <button class="btn" id="bStep100" type="button" title="Cent instructions">×100</button>
+          <button class="btn pk" id="bReset" type="button" title="Recharge la ROM (touche R)">⟲ Reset</button>
+          <label class="btn sm" for="file" style="cursor:pointer">📂 Fichier</label>
+          <input id="file" type="file" accept=".com,.cim,.bin,.rom" class="hidden">
+        </div>
+        <div class="flex items-center gap-3 grow min-w-0">
+          <span class="lbl">Vitesse</span>
+          <input id="speed" type="range" min="0" max="7" step="1" value="3" aria-label="Vitesse de simulation">
+          <span class="mono text-[14px] text-ye w-[70px] text-right" id="speedLbl">60/s</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="lbl">BP</span>
+          <input id="bpIn" type="text" maxlength="4" placeholder="0100" class="w-[68px]" aria-label="Adresse du point d'arrêt en hexadécimal">
+          <button class="btn sm" id="bpAdd" type="button">+</button>
+          <div id="bpList" class="flex gap-1"></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-8">
+        <div class="mono text-[13px] text-[#9aa5e0] leading-snug grow min-w-0" id="romInfo"></div>
+        <div class="flex items-center gap-3 w-[520px] shrink-0">
+          <span class="lbl whitespace-nowrap" id="progLbl">Tests</span>
+          <div class="bar grow"><div id="progBar"></div></div>
+          <span class="mono text-[14px] whitespace-nowrap"><span class="text-lm" id="nOk">0</span> ok · <span class="text-rd" id="nErr">0</span> err</span>
+        </div>
+      </div>
+    </div></div>
+  </header>
+
+  <!-- ===== 5 COLONNES ===== -->
+  <main class="flex gap-[14px] grow min-h-0">
+
+    <section class="w-[440px] shrink-0 flex flex-col gap-[14px] min-h-0">
+      <div class="panel"><div class="in">
+        <h2 class="ptitle">Registres<span class="sub">jeu principal</span></h2>
+        <div class="grid grid-cols-2 gap-2" id="regMain"></div>
+        <div class="lbl mt-3 mb-1 !text-vi">Jeu alternatif <span class="dim normal-case tracking-normal font-normal">(EXX · EX AF,AF')</span></div>
+        <div class="grid grid-cols-4 gap-2" id="regAlt"></div>
+        <div class="lbl mt-3 mb-1 !text-vi">Index · pointeurs · système</div>
+        <div class="grid grid-cols-4 gap-2" id="regSpec"></div>
+      </div></div>
+      <div class="panel"><div class="in">
+        <h2 class="ptitle">Drapeaux F<span class="sub mono" id="fBin">00000000</span></h2>
+        <div class="grid grid-cols-8 gap-[5px]" id="flags"></div>
+        <div class="mono text-[12px] dim mt-2">Violet : bits 5 et 3 non documentés, vérifiés par ZEXALL.</div>
+      </div></div>
+      <div class="panel fill"><div class="in">
+        <h2 class="ptitle">Pile<span class="sub">SP →</span></h2>
+        <div id="stk" class="flex flex-col gap-[2px] mono text-[14px] min-h-0 overflow-hidden"></div>
+      </div></div>
+    </section>
+
+    <section class="w-[440px] shrink-0 flex flex-col gap-[14px] min-h-0">
+      <div class="panel"><div class="in">
+        <h2 class="ptitle">Décodeur d'opcode<span class="sub" id="decAddr">0000</span></h2>
+        <div class="flex flex-wrap gap-2 mb-3 min-h-[40px]" id="decBytes"></div>
+        <div class="mnem" id="decMnem">—</div>
+        <div class="text-[14px] text-[#9aa5e0] mt-1 min-h-[40px] leading-snug" id="decDesc"></div>
+        <div class="flex flex-wrap items-end gap-x-4 gap-y-3 mt-3" id="decBits"></div>
+        <div class="grid grid-cols-3 gap-2 mt-3 mono text-[13px]">
+          <div class="chip"><span class="k">Table</span><span class="v" id="decTab">—</span></div>
+          <div class="chip"><span class="k">Longueur</span><span class="v" id="decLen">—</span></div>
+          <div class="chip"><span class="k">Dern. exéc.</span><span class="v" id="decT">0 T</span></div>
+        </div>
+      </div></div>
+      <div class="panel"><div class="in">
+        <h2 class="ptitle">Unité arithmétique · ALU<span class="sub" id="aluOp">—</span></h2>
+        <div class="alurow"><span class="nm">A</span><span class="hx text-[17px]" id="aluA">00</span><span class="leds" id="aluAl"></span></div>
+        <div class="alurow"><span class="nm"><span class="sym" id="aluSym">+</span>B</span><span class="hx text-[17px]" id="aluB">00</span><span class="leds pk" id="aluBl"></span></div>
+        <div class="alurow"><span class="nm">C<span class="dim">in</span></span><span class="hx text-[17px]" id="aluC">0</span><span class="mono dim text-[12px]" id="aluNote"></span></div>
+        <div class="aluline"></div>
+        <div class="alurow"><span class="nm !text-ye">=</span><span class="hx text-[17px] !text-ye" id="aluR">00</span><span class="leds ye" id="aluRl"></span></div>
+        <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 items-center mt-2 mono text-[12px]">
+          <span class="dim">F avant</span><span class="fmini" id="fmBefore"></span>
+          <span class="dim">F après</span><span class="fmini" id="fmAfter"></span>
+        </div>
+      </div></div>
+      <div class="panel fill"><div class="in !px-2">
+        <h2 class="ptitle !px-2">Trace d'exécution<span class="sub">récentes en haut</span></h2>
+        <div id="trcList" class="flex flex-col min-h-0 overflow-hidden"></div>
+      </div></div>
+    </section>
+
+    <section class="w-[440px] shrink-0 flex flex-col min-h-0">
+      <div class="panel fill"><div class="in">
+        <h2 class="ptitle">Processeur Z80<span class="sub" id="busTxt">—</span></h2>
+        <div class="flex-1 min-h-0 flex flex-col justify-center gap-4">
+          <div class="cpu" id="cpuPins"></div>
+          <div class="flex items-center justify-between mono text-[16px] px-2">
+            <span><span class="lbl">ADR</span> <span class="hx" id="busAh">0000</span></span>
+            <span><span class="lbl">DON</span> <span class="hx" id="busDh">00</span></span>
+          </div>
+          <div class="flex items-center justify-center gap-5 mono text-[12px] dim">
+            <span><i class="inline-block w-3 h-3 bg-lm align-middle mr-1"></i>actif</span>
+            <span><i class="inline-block w-3 h-3 bg-pk align-middle mr-1"></i>écriture</span>
+            <span><i class="inline-block w-3 h-3 bg-ye align-middle mr-1"></i>HALT</span>
+          </div>
+        </div>
+      </div></div>
+    </section>
+
+    <section class="w-[440px] shrink-0 flex flex-col min-h-0">
+      <div class="panel fill"><div class="in !px-2">
+        <h2 class="ptitle !px-2">Désassemblage<span class="sub">clic = point d'arrêt</span></h2>
+        <div id="disList" class="flex flex-col grow min-h-0 overflow-hidden"></div>
+      </div></div>
+    </section>
+
+    <section class="grow min-w-0 flex flex-col gap-[14px] min-h-0">
+      <div class="panel"><div class="in">
+        <h2 class="ptitle">Mémoire 64 Ko<span class="sub">PC · SP · HL · écritures</span></h2>
+        <div class="flex items-center gap-2 mb-3">
+          <select id="memFollow" aria-label="Suivi de la fenêtre mémoire">
+            <option value="pc">Suivre PC</option><option value="sp">Suivre SP</option><option value="hl">Suivre HL</option>
+            <option value="de">Suivre DE</option><option value="bc">Suivre BC</option><option value="wr">Dernière écriture</option><option value="man">Manuel</option>
+          </select>
+          <button class="btn sm" id="memPrev" type="button" aria-label="Page précédente">◀</button>
+          <input id="memAddr" type="text" maxlength="4" value="0100" class="w-[68px]" aria-label="Adresse de la fenêtre en hexadécimal">
+          <button class="btn sm" id="memNext" type="button" aria-label="Page suivante">▶</button>
+          <span class="mono text-[12px] dim ml-auto">256 octets</span>
+        </div>
+        <div class="memwrap"><div class="memgrid" id="mem"></div></div>
+      </div></div>
+      <div class="panel fill"><div class="in">
+        <h2 class="ptitle">Console CP/M<span class="sub"><button class="btn sm" id="clr" type="button">effacer</button></span></h2>
+        <pre class="term" id="term" aria-live="off"></pre>
+        <div class="mono text-[12px] dim mt-2 leading-snug">BDOS émulé : fonctions 2 et 9 en 0005h, retour CP/M en 0000h. Raccourcis : Espace · N pas · R reset. Glisser un .com / .cim / .bin pour le charger.</div>
+      </div></div>
+    </section>
+  </main>
+ </div>
+</div>
+
+<script>
+/* Zilog Z80 Emulator - client. Toutes les valeurs affichees viennent du crate Rust (puce-z80) via WebSocket /ws.
+   Cette page ne contient AUCUNE logique de CPU (voir docs/specs/31_FRONTEND_PROTOCOL.md). */
+(function(){
+'use strict';
+const E={};const $=id=>E[id]||(E[id]=document.getElementById(id));
+const hex=(v,n)=>v.toString(16).toUpperCase().padStart(n,'0');
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+/* ---------- langue FR / EN ---------- */
+let LANG='fr';
+try{const sv=localStorage.getItem('z80lang');LANG=sv||((navigator.language||'fr').toLowerCase().startsWith('fr')?'fr':'en');}catch(e){LANG=((navigator.language||'fr').toLowerCase().startsWith('fr')?'fr':'en');}
+const EN={"Zilog · 8 bits · CPU Rust cycle par cycle": "Zilog · 8-bit · cycle-accurate Rust CPU", "Zilog · 8 bits · simulateur de ROMs de test": "Zilog · 8-bit · test ROM simulator", "T-ÉTATS": "T-STATES", "VITESSE": "SPEED", "ÉQUIV.": "EQUIV.", "INSTR": "INSTR", "⏭ Pas": "⏭ Step", "📂 Fichier": "📂 File", "Vitesse": "Speed", "Registres": "Registers", "jeu principal": "main set", "Jeu alternatif": "Alternate set", "Index · pointeurs · système": "Index · pointers · system", "Drapeaux F": "Flags F", "Violet : bits 5 et 3 non documentés, vérifiés par ZEXALL.": "Purple: undocumented bits 5 and 3, checked by ZEXALL.", "Pile": "Stack", "Décodeur d'opcode": "Opcode decoder", "Table": "Table", "Longueur": "Length", "Dern. exéc.": "Last run", "Unité arithmétique · ALU": "Arithmetic logic unit · ALU", "F avant": "F before", "F après": "F after", "Trace d'exécution": "Execution trace", "récentes en haut": "newest first", "Processeur Z80": "Z80 processor", "actif": "active", "écriture": "write", "DON": "DATA", "Désassemblage": "Disassembly", "clic = point d'arrêt": "click = breakpoint", "Mémoire 64 Ko": "Memory 64 KB", "PC · SP · HL · écritures": "PC · SP · HL · writes", "Suivre PC": "Follow PC", "Suivre SP": "Follow SP", "Suivre HL": "Follow HL", "Suivre DE": "Follow DE", "Suivre BC": "Follow BC", "Dernière écriture": "Last write", "Manuel": "Manual", "256 octets": "256 bytes", "Console CP/M": "CP/M console", "effacer": "clear", "BDOS émulé : fonctions 2 et 9 en 0005h, retour CP/M en 0000h. Raccourcis : Espace · N pas · R reset. Glisser un .com / .cim / .bin pour le charger.": "Emulated BDOS: functions 2 and 9 at 0005h, CP/M return at 0000h. Shortcuts: Space · N step · R reset. Drop a .com / .cim / .bin file to load it.", "Signe": "Sign", "Zéro": "Zero", "bit 5": "bit 5", "Demi-ret.": "Half-carry", "bit 3": "bit 3", "Parité Débord.": "Parity Overflow", "Soustr.": "Subtract", "Retenue": "Carry"};
+const DESCEN={"NOP": "Does nothing for 4 clock cycles.", "HALT": "Stops the processor until an interrupt.", "LD": "Copies a value: register, memory or immediate constant. No flag changed (except LD A,I and LD A,R).", "PUSH": "Pushes a 16-bit register: SP decreases by 2.", "POP": "Pops 16 bits into a register: SP increases by 2.", "EX": "Exchanges two registers, or a register with the top of the stack.", "EXX": "Swaps BC, DE, HL with their shadow twins BC', DE', HL'.", "ADD": "Addition. Updates S, Z, H, P/V (overflow), N=0 and C.", "ADC": "Addition with incoming carry C.", "SUB": "Subtracts from A. N=1, C = borrow.", "SBC": "Subtraction with incoming borrow.", "AND": "Bitwise AND. H=1, P/V = parity.", "OR": "Bitwise OR. P/V = parity.", "XOR": "Exclusive OR. Also used to clear A.", "CP": "Compares with A: a subtraction that only keeps its effect on the flags.", "INC": "Increments by 1. C unchanged (8-bit); no flags in 16-bit.", "DEC": "Decrements by 1. C unchanged (8-bit).", "JP": "Absolute jump to a 16-bit address, possibly conditional.", "JR": "Signed relative jump (-126 to +129 bytes), possibly conditional.", "DJNZ": "Decrements B then jumps if B is not 0: the shortest Z80 loop.", "CALL": "Subroutine call: pushes the return address then jumps.", "RET": "Return: pops PC. May be conditional.", "RETI": "Return from interrupt.", "RETN": "Return from non-maskable interrupt.", "RST": "Short call to one of eight fixed addresses 00h-38h.", "DI": "Disables maskable interrupts.", "EI": "Enables maskable interrupts.", "IM": "Selects interrupt mode 0, 1 or 2.", "IN": "Reads an I/O port.", "OUT": "Writes to an I/O port.", "RLCA": "Rotates A left, bit 7 goes to bit 0 and to C.", "RRCA": "Rotates A right, bit 0 goes to bit 7 and to C.", "RLA": "Rotates A left through carry.", "RRA": "Rotates A right through carry.", "RLC": "Rotate left.", "RRC": "Rotate right.", "RL": "Rotate left through C.", "RR": "Rotate right through C.", "SLA": "Arithmetic shift left (x2).", "SRA": "Arithmetic shift right (/2, sign kept).", "SLL": "Shift left, bit 0 forced to 1 (undocumented).", "SRL": "Logical shift right (/2).", "BIT": "Tests a bit: Z=1 if the bit is 0. H=1.", "RES": "Clears a bit.", "SET": "Sets a bit.", "DAA": "Decimal adjust of A after a BCD addition or subtraction.", "CPL": "One's complement of A (inverts all bits).", "NEG": "Two's complement of A (A <- 0 - A).", "SCF": "Sets the carry flag.", "CCF": "Inverts the carry flag.", "RRD": "4-bit rotate right between A and (HL).", "RLD": "4-bit rotate left between A and (HL).", "LDI": "Copies (HL)->(DE), increments HL and DE, decrements BC.", "LDIR": "LDI repeated until BC = 0.", "LDD": "Copies (HL)->(DE), decrements HL, DE and BC.", "LDDR": "LDD repeated until BC = 0.", "CPI": "Compares A with (HL), increments HL, decrements BC.", "CPIR": "CPI repeated until match or BC = 0.", "CPD": "Compares A with (HL), decrements HL and BC.", "CPDR": "CPD repeated until match or BC = 0.", "INI": "Reads a port into (HL), B-1, HL+1.", "INIR": "INI repeated until B = 0.", "IND": "Reads a port into (HL), B-1, HL-1.", "INDR": "IND repeated until B = 0.", "OUTI": "Writes (HL) to a port, B-1, HL+1.", "OTIR": "OUTI repeated until B = 0.", "OUTD": "Writes (HL) to a port, B-1, HL-1.", "OTDR": "OUTD repeated until B = 0."};
+const EN2={"Déconnecté":"Disconnected","Connexion…":"Connecting…","Aucune ROM trouvée dans tests/roms":"No ROM found in tests/roms","Prêt":"Ready","En marche":"Running","Terminé · retour CP/M":"Finished · back to CP/M","Pause":"Paused","Point d'arrêt":"Breakpoint","▶ Lancer":"▶ Run","⏸ Pause":"⏸ Pause",
+ "Principale":"Main","Lecture instr.":"Instr. fetch","Lecture mém.":"Memory read","Écriture mém.":"Memory write","Lecture E/S":"I/O read","Écriture E/S":"I/O write",
+ "masque du bit testé":"tested bit mask","opérande unique":"single operand","Aucune instruction exécutée.":"No instruction executed yet.",
+ "Opcode ED non défini : se comporte comme NOP.":"Undefined ED opcode: behaves like NOP.","Retirer":"Remove","Résultat":"Result","Tests":"Tests",
+ "octets":"bytes","octet":"byte"};
+function T(s){return(LANG==='en'&&(EN2[s]||EN[s]))||s;}
+const SKIP=new Set(['crateInfo','bRun','status','progLbl','romInfo','decDesc','decTab','decLen','aluNote','busTxt','aluOp','decMnem']);
+function applyLang(){
+  const st=document.getElementById('stage');
+  const w=document.createTreeWalker(st,NodeFilter.SHOW_TEXT,null);let n;
+  while((n=w.nextNode())){
+    const p=n.parentNode;if(!p||p.nodeName==='SCRIPT'||p.nodeName==='STYLE'||SKIP.has(p.id)||p.closest('#term,#disList,#trcList,#stk,#mem'))continue;
+    if(n._k===undefined){const cur=n.nodeValue.trim();n._k=(cur&&EN[cur])?cur:null;}
+    if(n._k)n.nodeValue=n.nodeValue.replace(/\S(?:[\s\S]*\S)?/,LANG==='en'?EN[n._k]:n._k);
+  }
+  st.querySelectorAll('[title],[placeholder],[aria-label]').forEach(el=>{
+    ['title','placeholder','aria-label'].forEach(a=>{if(!el.hasAttribute(a))return;
+      const k='_a'+a;if(el[k]===undefined)el[k]=el.getAttribute(a);
+      const v=el[k];el.setAttribute(a,LANG==='en'?(ATTR_EN[v]||v):v);});
+  });
+  document.documentElement.lang=LANG;
+  document.querySelectorAll('#langBar .btn').forEach(b=>b.classList.toggle('active',b.dataset.l===LANG));
+  document.querySelectorAll('#memFollow option').forEach(o=>{if(o._k===undefined)o._k=o.textContent;o.textContent=LANG==='en'?(EN[o._k]||o._k):o._k;});
+}
+const ATTR_EN={"Une instruction (touche N)":"One instruction (N key)","Cent instructions":"One hundred instructions","Recharge la ROM (touche R)":"Reloads the ROM (R key)",
+ "Vitesse de simulation":"Simulation speed","Adresse du point d'arrêt en hexadécimal":"Breakpoint address in hexadecimal","ROMs de test":"Test ROMs",
+ "Suivi de la fenêtre mémoire":"Memory window follow mode","Page précédente":"Previous page","Page suivante":"Next page","Adresse de la fenêtre en hexadécimal":"Window address in hexadecimal"};
+document.getElementById('langBar').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  LANG=b.dataset.l;try{localStorage.setItem('z80lang',LANG);}catch(x){}
+  applyLang();Object.keys(tcache).forEach(k=>delete tcache[k]);$('status')._k=null;lastKeys.main=null;setRunBtn();syncRomInfo();render();});
+/* ---------- utilitaires d'affichage ---------- */
+let flashOn=true,flipFlash=false;
+const tcache={};
+function tx(id,txt){
+  if(tcache[id]===txt)return;
+  const had=id in tcache;tcache[id]=txt;
+  const el=$(id);el.textContent=txt;
+  if(flashOn&&had){el.classList.remove('chgA','chgB');el.classList.add(flipFlash?'chgA':'chgB');flipFlash=!flipFlash;}
+}
+function leds(id,n,cls){
+  const el=typeof id==='string'?$(id):id;el.innerHTML='<i></i>'.repeat(n);
+  const cells=[...el.children].reverse();   // cells[0] = bit 0
+  let last=-1,lastW=-1;
+  return {set(v,w){const ww=w||n;if(v===last&&ww===lastW)return;last=v;lastW=ww;
+    for(let i=0;i<n;i++){const on=((v>>>i)&1)===1;const c=cells[i];c.classList.toggle('on',on);c.classList.toggle('na',i>=ww);}}};
+}
+function setCls(el,key,cls){if(el._k!==cls){el.className=cls;el._k=cls;}}
+
+/* ---------- squelette : registres ---------- */
+const PAIRS=[['AF','A','F',7,6],['BC','B','C',0,1],['DE','D','E',2,3],['HL','H','L',4,5]];
+$('regMain').innerHTML=PAIRS.map(([n,hi,lo])=>`
+  <div class="regcard">
+    <div class="flex items-baseline justify-between"><span class="lbl">${n}</span><span class="mono text-[12px] dim" id="d_${n}"></span></div>
+    <div class="hx big" id="v_${n}">0000</div>
+    <div class="byterow"><b>${hi}</b><span class="hx" id="v_${hi}">00</span><span class="leds sm" id="l_${hi}"></span></div>
+    <div class="byterow"><b>${lo}</b><span class="hx" id="v_${lo}">00</span><span class="leds sm pk" id="l_${lo}"></span></div>
+  </div>`).join('');
+const regLeds={};
+PAIRS.forEach(([n,hi,lo])=>{regLeds[hi]=leds('l_'+hi,8);regLeds[lo]=leds('l_'+lo,8);});
+const chip=(id,k,cls='')=>`<div class="chip ${cls}"><span class="k">${k}</span><span class="v hx" id="${id}">0000</span></div>`;
+$('regAlt').innerHTML=['AF','BC','DE','HL'].map(n=>chip('v_'+n+'2',n+"'")).join('');
+$('regSpec').innerHTML=[chip('v_PC','PC','pc'),chip('v_SP','SP'),chip('v_IX','IX'),chip('v_IY','IY'),chip('v_I','I'),chip('v_R','R'),chip('v_WZ','WZ'),chip('v_IM','IM · IFF')].join('');
+
+/* drapeaux */
+const FL=[['S','Signe',0x80,0],['Z','Zéro',0x40,0],['Y','bit 5',0x20,1],['H','Demi-ret.',0x10,0],['X','bit 3',0x08,1],['P','Parité Débord.',0x04,0],['N','Soustr.',0x02,0],['C','Retenue',0x01,0]];
+$('flags').innerHTML=FL.map(([l,n,m,u])=>`<div class="flag ${u?'und':''}" id="fl_${m}"><span class="l">${l}</span><span class="n">${n}</span></div>`).join('');
+const fmHtml=FL.map(([l,,m])=>`<span data-m="${m}">${l}</span>`).join('');
+$('fmBefore').innerHTML=fmHtml;$('fmAfter').innerHTML=fmHtml;
+
+/* ALU, bus */
+const aluAl=leds('aluAl',16),aluBl=leds('aluBl',16),aluRl=leds('aluRl',16);
+/* puce Z80 : broches comme sur le schéma (D0-D7 + contrôle à gauche, A0-A15 à droite) */
+const LPINS=['D0','D1','D2','D3','D4','D5','D6','D7','M1','MREQ','IORQ','RD','WR','RFSH','HALT','INT','NMI','WAIT'];
+const RPINS=[];for(let i=0;i<16;i++)RPINS.push('A'+i);
+const pinHtml=(n,side)=>`<div class="pin ${side} ${/^[DA]\d/.test(n)?'':'ctl'} ${n==='WR'?'wr':''} ${n==='HALT'?'hl':''}" id="pin_${n}">${side==='l'?`<span class="pn">${n}</span><i class="sq"></i>`:`<i class="sq"></i><span class="pn">${n}</span>`}</div>`;
+$('cpuPins').innerHTML=`<div class="pins">${LPINS.map(n=>pinHtml(n,'l')).join('')}</div>
+  <div class="chipbody"><div class="nm">Z80</div><div class="nm2">CPU</div><div class="zl">ZILOG</div></div>
+  <div class="pins">${RPINS.map(n=>pinHtml(n,'r')).join('')}</div>`;
+const pinEl={};LPINS.concat(RPINS).forEach(n=>pinEl[n]=$('pin_'+n));
+function setPin(n,on){const el=pinEl[n];if(el._o!==on){el._o=on;el.classList.toggle('on',on);}}
+function fit(){const sc=Math.min(innerWidth/2560,innerHeight/1440);const st=$('stage');
+  st.style.transform='scale('+sc+')';st.style.left=((innerWidth-2560*sc)/2)+'px';st.style.top=((innerHeight-1440*sc)/2)+'px';}
+addEventListener('resize',fit);fit();
+let disRows=40,traceRows=16,stkRows=14;
+function sizeLists(){
+  disRows=Math.max(8,Math.floor($('disList').clientHeight/26));
+  traceRows=Math.max(6,Math.min(31,Math.floor($('trcList').clientHeight/26)));
+  stkRows=Math.max(6,Math.floor($('stk').clientHeight/28));
+  lastKeys.main=null;
+}
+$('decBits').innerHTML='';
+
+/* mémoire */
+let memHtml='<span class="hd"></span>';
+for(let c=0;c<16;c++)memHtml+=`<span class="hd mc">${c.toString(16).toUpperCase()}</span>`;
+memHtml+='<span class="hd">ASCII</span>';
+for(let r=0;r<16;r++){memHtml+=`<span class="ad" id="ma${r}"></span>`;for(let c=0;c<16;c++)memHtml+=`<span class="mc" id="mc${r*16+c}">00</span>`;memHtml+=`<span class="asc" id="as${r}"></span>`;}
+$('mem').innerHTML=memHtml;
+const memCells=[],memAsc=[],memAd=[];
+for(let i=0;i<256;i++)memCells.push($('mc'+i));
+for(let r=0;r<16;r++){memAsc.push($('as'+r));memAd.push($('ma'+r));}
+const memTxt=new Array(256).fill(''),memCl=new Array(256).fill('');
+/* ---------- descriptions ---------- */
+const DESC={
+ NOP:'Ne fait rien pendant 4 cycles d\'horloge.',HALT:'Arrête le processeur jusqu\'à une interruption.',
+ LD:'Copie une valeur : registre, mémoire ou constante immédiate. Aucun drapeau modifié (sauf LD A,I et LD A,R).',
+ PUSH:'Empile un registre 16 bits : SP diminue de 2.',POP:'Dépile 16 bits dans un registre : SP augmente de 2.',
+ EX:'Échange le contenu de deux registres ou d\'un registre avec le sommet de pile.',EXX:'Échange BC, DE, HL avec leurs jumeaux BC\', DE\', HL\'.',
+ ADD:'Addition. Met à jour S, Z, H, P/V (débordement), N=0 et C.',ADC:'Addition avec retenue entrante C.',
+ SUB:'Soustraction de A. N=1, C = emprunt.',SBC:'Soustraction avec emprunt entrant.',
+ AND:'ET logique bit à bit. H=1, P/V = parité.',OR:'OU logique bit à bit. P/V = parité.',XOR:'OU exclusif. Sert aussi à mettre A à 0.',
+ CP:'Compare à A : soustraction dont seul l\'effet sur les drapeaux est conservé.',
+ INC:'Incrémente de 1. C n\'est pas modifié (8 bits) ; aucun drapeau en 16 bits.',DEC:'Décrémente de 1. C n\'est pas modifié (8 bits).',
+ JP:'Saut absolu vers une adresse 16 bits, éventuellement conditionnel.',JR:'Saut relatif signé (−126 à +129 octets), éventuellement conditionnel.',
+ DJNZ:'Décrémente B puis saute si B ≠ 0 : la boucle la plus courte du Z80.',CALL:'Appel de sous-programme : empile l\'adresse de retour puis saute.',
+ RET:'Retour : dépile PC. Peut être conditionnel.',RETI:'Retour d\'interruption.',RETN:'Retour d\'interruption non masquable.',RST:'Appel court vers une des huit adresses fixes 00h–38h.',
+ DI:'Interdit les interruptions masquables.',EI:'Autorise les interruptions masquables.',IM:'Choisit le mode d\'interruption 0, 1 ou 2.',
+ IN:'Lit un port d\'entrée/sortie.',OUT:'Écrit sur un port d\'entrée/sortie.',
+ RLCA:'Rotation de A à gauche, le bit 7 revient en bit 0 et dans C.',RRCA:'Rotation de A à droite, le bit 0 revient en bit 7 et dans C.',
+ RLA:'Rotation de A à gauche à travers la retenue.',RRA:'Rotation de A à droite à travers la retenue.',
+ RLC:'Rotation à gauche.',RRC:'Rotation à droite.',RL:'Rotation à gauche à travers C.',RR:'Rotation à droite à travers C.',
+ SLA:'Décalage arithmétique à gauche (×2).',SRA:'Décalage arithmétique à droite (÷2, signe conservé).',SLL:'Décalage à gauche, bit 0 forcé à 1 (non documenté).',SRL:'Décalage logique à droite (÷2).',
+ BIT:'Teste un bit : Z=1 si le bit est à 0. H=1.',RES:'Met un bit à 0.',SET:'Met un bit à 1.',
+ DAA:'Ajustement décimal de A après une addition ou soustraction BCD.',CPL:'Complément à un de A (inverse tous les bits).',NEG:'Complément à deux de A (A ← 0 − A).',
+ SCF:'Force la retenue à 1.',CCF:'Inverse la retenue.',RRD:'Rotation de 4 bits à droite entre A et (HL).',RLD:'Rotation de 4 bits à gauche entre A et (HL).',
+ LDI:'Copie (HL)→(DE), incrémente HL et DE, décrémente BC.',LDIR:'LDI répété jusqu\'à BC = 0.',LDD:'Copie (HL)→(DE), décrémente HL, DE et BC.',LDDR:'LDD répété jusqu\'à BC = 0.',
+ CPI:'Compare A à (HL), incrémente HL, décrémente BC.',CPIR:'CPI répété jusqu\'à égalité ou BC = 0.',CPD:'Compare A à (HL), décrémente HL et BC.',CPDR:'CPD répété jusqu\'à égalité ou BC = 0.',
+ INI:'Lit un port vers (HL), B−1, HL+1.',INIR:'INI répété jusqu\'à B = 0.',IND:'Lit un port vers (HL), B−1, HL−1.',INDR:'IND répété jusqu\'à B = 0.',
+ OUTI:'Écrit (HL) sur un port, B−1, HL+1.',OTIR:'OUTI répété jusqu\'à B = 0.',OUTD:'Écrit (HL) sur un port, B−1, HL−1.',OTDR:'OUTD répété jusqu\'à B = 0.'
+};
+const ALUSYM={ADD:'+',ADC:'+',SUB:'−',SBC:'−',CP:'−',AND:'&',OR:'|',XOR:'^',ADD16:'+',ADC16:'+',SBC16:'−',NEG:'−',INC:'+',DEC:'−',LDI:'→',LDD:'→',CPI:'−',CPD:'−'};
+const UNARY=new Set(['RLC','RRC','RL','RR','SLA','SRA','SLL','SRL','RLCA','RRCA','RLA','RRA','CPL','SCF','CCF']);
+
+/* ---------- connexion au crate Rust (WebSocket) ---------- */
+let S=null;                    // dernier instantané `state` reçu du serveur (aucun calcul de CPU ici)
+let ws=null,wsOpen=false,reconnectT=null,term='',nOk=0,nErr=0,romList=[],lastSpeedSent=-1;
+const SLBL=['1/s','4/s','15/s','60/s','300/s','3 k/s','60 k/s','TURBO'];
+let speedIdx=3,memBase=0x100,lastKeys={};
+const ipsHist=[];
+function send(o){if(ws&&wsOpen){try{ws.send(JSON.stringify(o));}catch(e){}}}
+function wsUrl(){return (location.protocol==='https:'?'wss://':'ws://')+(location.host||'127.0.0.1:8080')+'/ws';}
+function connect(){
+  clearTimeout(reconnectT);
+  try{ws=new WebSocket(wsUrl());}catch(e){reconnectT=setTimeout(connect,1000);return;}
+  ws.onopen=()=>{wsOpen=true;lastSpeedSent=-1;send({cmd:'hello'});sendView();send({cmd:'speed',idx:speedIdx});render();};
+  ws.onclose=()=>{wsOpen=false;render();reconnectT=setTimeout(connect,1000);};
+  ws.onerror=()=>{try{ws.close();}catch(e){}};
+  ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}onMsg(m);};
+}
+function onMsg(m){
+  if(m.type==='roms'){romList=m.roms||[];buildRomBar();}
+  else if(m.type==='state'){onState(m);}
+  else if(m.type==='hello'){if(m.version){$('crateInfo').textContent='puce-z80 v'+m.version;}}
+  else if(m.type==='error'){console.warn('z80-web:',m.message);}
+}
+function onState(m){
+  if(m.console_delta){term+=m.console_delta;if(term.length>40000)term=term.slice(-30000);termDirty=true;}
+  if(m.console_reset){term='';termDirty=true;}
+  S=m;
+  if(m.version)$('crateInfo').textContent='puce-z80 v'+m.version;
+  ipsHist.push(performance.now());
+  render();
+}
+let termDirty=false;
+function sendView(){send({cmd:'view',mem_base:memBase,follow:$('memFollow').value,dis_rows:disRows,trace_rows:traceRows,stack_rows:stkRows});}
+
+/* ---------- ROMs ---------- */
+function buildRomBar(){
+  const bar=$('romBar');bar.querySelectorAll('.rom').forEach(b=>b.remove());
+  bar.insertAdjacentHTML('beforeend',romList.map((r,i)=>`<button class="rom" type="button" data-i="${i}" title="${esc(r.name)}">${esc(r.name.split('/').pop().toUpperCase())}</button>`).join('')||`<span class="dim mono text-[13px]">${T('Aucune ROM trouvée dans tests/roms')}</span>`);
+  syncRomSel();
+}
+function syncRomSel(){const cur=S&&S.rom?S.rom.name:'';document.querySelectorAll('.rom').forEach(b=>b.classList.toggle('sel',romList[+b.dataset.i]&&romList[+b.dataset.i].name===cur));}
+$('romBar').addEventListener('click',e=>{const b=e.target.closest('.rom');if(b&&romList[+b.dataset.i]){send({cmd:'load',name:romList[+b.dataset.i].name});}});
+function u8b64(u8){let s='';const CH=0x8000;for(let i=0;i<u8.length;i+=CH)s+=String.fromCharCode.apply(null,u8.subarray(i,i+CH));return btoa(s);}
+async function loadFile(name,buf){send({cmd:'upload',name,data_b64:u8b64(new Uint8Array(buf))});}
+$('file').addEventListener('change',async e=>{const f=e.target.files[0];if(f){await loadFile(f.name,await f.arrayBuffer());}e.target.value='';});
+document.addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('drop');});
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('drop');});
+document.addEventListener('drop',async e=>{e.preventDefault();document.body.classList.remove('drop');const f=e.dataTransfer.files[0];if(f)await loadFile(f.name,await f.arrayBuffer());});
+
+function syncRomInfo(){
+  if(!S||!S.rom){$('romInfo').textContent='';return;}
+  const en=LANG==='en',r=S.rom;
+  const where=r.kind==='raw'?(en?'loaded at 0000h (raw mode, no BDOS, stops on HALT)':'chargée en 0000h (mode brut, sans BDOS, arrêt sur HALT)'):(en?'loaded at 0100h (CP/M mode, BDOS emulated by the Rust crate server)':'chargée en 0100h (mode CP/M, BDOS émulé côté serveur Rust)');
+  $('romInfo').textContent=`${r.name} · ${r.size} ${en?'bytes':'octets'} · ${where}`;
+  $('progLbl').textContent=(S.tests&&S.tests.total)?T('Tests'):T('Résultat');
+}
+
+/* ---------- commandes ---------- */
+const isRunning=()=>!!(S&&S.status==='running');
+function setRunBtn(){const b=$('bRun'),r=isRunning();b.textContent=r?T('⏸ Pause'):T('▶ Lancer');b.classList.toggle('active',r);}
+$('bRun').onclick=()=>{send({cmd:isRunning()?'pause':'run'});};
+$('bStep').onclick=()=>{flashOn=true;send({cmd:'step',n:1});};
+$('bStep100').onclick=()=>{flashOn=false;send({cmd:'step',n:100});};
+$('bReset').onclick=()=>{send({cmd:'reset'});};
+$('speed').oninput=e=>{speedIdx=+e.target.value;$('speedLbl').textContent=SLBL[speedIdx];send({cmd:'speed',idx:speedIdx});};
+$('speedLbl').textContent=SLBL[speedIdx];
+document.addEventListener('keydown',e=>{
+  if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
+  if(e.code==='Space'){e.preventDefault();$('bRun').click();}
+  else if(e.key==='n'||e.key==='N')$('bStep').click();
+  else if(e.key==='r'||e.key==='R')$('bReset').click();
+});
+const bpHas=a=>!!(S&&S.bps&&S.bps.includes(a));
+function toggleBp(a){send({cmd:bpHas(a)?'bp_del':'bp_add',addr:a});}
+$('bpAdd').onclick=()=>{const v=parseInt($('bpIn').value,16);if(!isNaN(v)&&v>=0&&v<65536)send({cmd:'bp_add',addr:v});};
+$('bpIn').addEventListener('keydown',e=>{if(e.key==='Enter')$('bpAdd').click();});
+$('bpList').addEventListener('click',e=>{const b=e.target.closest('button');if(b)toggleBp(+b.dataset.a);});
+$('disList').addEventListener('click',e=>{const r=e.target.closest('.dis');if(r)toggleBp(+r.dataset.a);});
+$('clr').onclick=()=>{term='';termDirty=true;send({cmd:'console_clear'});render();};
+$('memFollow').onchange=()=>{sendView();};
+$('memAddr').addEventListener('change',()=>{const v=parseInt($('memAddr').value,16);if(!isNaN(v)){$('memFollow').value='man';memBase=v&0xFF00;sendView();}});
+$('memPrev').onclick=()=>{$('memFollow').value='man';memBase=((S&&S.mem?S.mem.base:memBase)-256)&0xFFFF;sendView();};
+$('memNext').onclick=()=>{$('memFollow').value='man';memBase=((S&&S.mem?S.mem.base:memBase)+256)&0xFFFF;sendView();};
+
+/* ---------- rendu : uniquement de la mise en forme des valeurs reçues ---------- */
+const PINBIT={M1:24,MREQ:25,IORQ:26,RD:27,WR:28,HALT:29,WAIT:30,INT:31,NMI:32,RFSH:33};
+function pinsOf(m){let p=0n;try{p=BigInt(m.bus.pins);}catch(e){p=0n;}return p;}
+function render(){
+  setRunBtn();
+  const sb=$('status');
+  let st='Prêt',cl='b-idle';
+  if(!wsOpen){st=S?'Déconnecté':'Connexion…';cl='b-bp';}
+  else if(S){const s=S.status;
+    if(s==='running'){st='En marche';cl='b-run';}
+    else if(s==='done'){st='Terminé · retour CP/M';cl='b-done';}
+    else if(s==='halted'){st='HALT';cl='b-halt';}
+    else if(s==='bp'){st='Point d\'arrêt';cl='b-bp';}
+    else if(S.n>0){st='Pause';cl='b-idle';}}
+  if(sb._k!==st){sb.textContent=T(st);sb.className='badge '+cl;sb._k=st;}
+  if(!S){return;}
+  const r=S.regs||{};
+  tx0('sInstr',(S.n||0).toLocaleString('fr-FR'));tx0('sT',(S.t||0).toLocaleString('fr-FR'));
+  const ips=S.ips||0,mhz=S.mhz||0;
+  tx0('sIps',ips>=1000?(ips/1000).toFixed(ips>=1e5?0:1)+'k':String(Math.round(ips)));tx0('sMhz',mhz.toFixed(2));
+  flashOn=(S.status==='running')?(speedIdx<=4):flashOn;
+  /* registres */
+  [['AF','A','F','af'],['BC','B','C','bc'],['DE','D','E','de'],['HL','H','L','hl']].forEach(([n,hi,lo,k])=>{
+    const v=r[k]|0,h=v>>8,l=v&255;
+    tx('v_'+n,hex(v,4));tx('d_'+n,String(v));tx('v_'+hi,hex(h,2));tx('v_'+lo,hex(l,2));regLeds[hi].set(h);regLeds[lo].set(l);
+  });
+  tx('v_AF2',hex(r.af2|0,4));tx('v_BC2',hex(r.bc2|0,4));tx('v_DE2',hex(r.de2|0,4));tx('v_HL2',hex(r.hl2|0,4));
+  tx('v_PC',hex(r.pc|0,4));tx('v_SP',hex(r.sp|0,4));tx('v_IX',hex(r.ix|0,4));tx('v_IY',hex(r.iy|0,4));
+  tx('v_I',hex(r.i|0,2));tx('v_R',hex(r.r|0,2));tx('v_WZ',hex(r.wz|0,4));tx('v_IM',(r.im|0)+' · '+(r.iff1?1:0)+(r.iff2?1:0));
+  /* drapeaux */
+  const f=(r.af|0)&255;
+  FL.forEach(([,,m,u])=>{setCls($('fl_'+m),'f','flag'+(u?' und':'')+((f&m)?' on':''));});
+  tx0('fBin',f.toString(2).padStart(8,'0'));
+  /* ALU (donnée du crate, feature inspect) */
+  const al=S.alu;
+  if(al){
+    const w=al.w||8,op=al.op||'',mask=w===16?0xFFFF:0xFF;
+    tx0('aluOp',op+(w===16?(LANG==='en'?' · 16-bit':' · 16 bits'):''));
+    const unary=UNARY.has(op);
+    tx0('aluA',hex((al.a|0)&mask,w/4));tx0('aluB',unary?'—':hex((al.b|0)&mask,w/4));
+    tx0('aluSym',unary?'':(ALUSYM[op]||''));tx0('aluC',String(al.c|0));tx0('aluR',hex((al.r|0)&mask,w/4));
+    tx0('aluNote',op==='BIT'?T('masque du bit testé'):op==='DAA'?'correction = '+hex(al.b|0,2):unary?T('opérande unique'):'');
+    aluAl.set((al.a|0)&mask,w);aluBl.set(unary?0:(al.b|0)&mask,w);aluRl.set((al.r|0)&mask,w);
+    const fa=al.f_in|0;
+    $('fmBefore').querySelectorAll('span').forEach(s=>{const m=+s.dataset.m;setCls(s,'b',((fa&m)?'on':''));});
+    $('fmAfter').querySelectorAll('span').forEach(s=>{const m=+s.dataset.m;setCls(s,'a',((f&m)?'on':'')+(((f^fa)&m)?' chg':''));});
+  }else{
+    tx0('aluOp','—');tx0('aluA','');tx0('aluB','');tx0('aluSym','');tx0('aluC','0');tx0('aluR','');tx0('aluNote','');
+    aluAl.set(0,8);aluBl.set(0,8);aluRl.set(0,8);
+  }
+  /* bus et broches (valeurs REELLES du dernier cycle du crate) */
+  if(S.bus){
+    const ba=S.bus.addr|0,bd=S.bus.data|0,k=S.bus.kind|0,p=pinsOf(S);
+    tx0('busAh',hex(ba,4));tx0('busDh',hex(bd,2));
+    for(let i=0;i<16;i++)setPin('A'+i,((ba>>i)&1)===1);
+    for(let i=0;i<8;i++)setPin('D'+i,((bd>>i)&1)===1);
+    for(const n in PINBIT)setPin(n,((p>>BigInt(PINBIT[n]))&1n)===1n);
+    tx0('busTxt',T(['Lecture instr.','Lecture mém.','Écriture mém.','Lecture E/S','Écriture E/S'][k]||''));
+  }
+  /* listes */
+  const key=[r.pc,S.n,(S.bps||[]).join(','),S.mem&&S.mem.base,(S.dis||[]).length,(S.trace||[]).length].join(':');
+  if(lastKeys.main!==key){lastKeys.main=key;renderDis();renderTrace();renderDecoder();renderStack();}
+  tx0('decT',(S.tlast|0)+' T');
+  renderBps();
+  renderMem();
+  if(termDirty){const t=$('term');t.textContent=term;const c=document.createElement('span');c.className='cur';t.appendChild(c);t.scrollTop=t.scrollHeight;termDirty=false;}
+  /* progression des tests (compteurs du serveur) */
+  const ts=S.tests||{ok:0,err:0,total:0};nOk=ts.ok|0;nErr=ts.err|0;
+  if(ts.total)$('progBar').style.width=Math.min(100,(nOk+nErr)/ts.total*100)+'%';
+  else $('progBar').style.width=S.status==='done'?'100%':((S.n|0)?'40%':'0%');
+  tx0('nOk',String(nOk));tx0('nErr',String(nErr));
+  syncRomSel();syncRomInfo();
+}
+function tx0(id,t){if(tcache[id]===t)return;tcache[id]=t;$(id).textContent=t;}
+function renderBps(){
+  const k=(S.bps||[]).join(',');if(lastKeys.bp===k)return;lastKeys.bp=k;
+  $('bpList').innerHTML=(S.bps||[]).map(a=>`<button type="button" class="btn sm pk" data-a="${a}" title="${T('Retirer')}">${hex(a,4)} ×</button>`).join('');
+}
+function renderDis(){
+  const rows=S.dis||[];let html='';
+  rows.forEach((d,i)=>{
+    html+=`<div class="row dis${i===0?' cur':''}${bpHas(d.addr)?' hasbp':''}" data-a="${d.addr}"><span class="bp"></span><span class="a">${hex(d.addr,4)}</span><span class="b">${(d.bytes||[]).map(b=>hex(b,2)).join(' ')}</span><span class="t">${esc(d.text||'')}</span></div>`;
+  });
+  $('disList').innerHTML=html;
+}
+function renderTrace(){
+  const rows=S.trace||[];let html='';
+  rows.forEach((t,k)=>{html+=`<div class="row trc"><span class="c" style="text-align:left">${k===0?'→':''}</span><span class="a">${hex(t.pc,4)}</span><span class="t">${esc(t.text||'')}</span><span class="c">${k+1}</span></div>`;});
+  $('trcList').innerHTML=html||'<div class="row dim">'+T('Aucune instruction exécutée.')+'</div>';
+}
+function renderDecoder(){
+  const d=(S.dis||[])[0];if(!d)return;
+  tx0('decAddr',hex(d.addr,4)+'h');
+  const bytes=d.bytes||[],pre=d.pre||'';
+  let opIdx;
+  if(/CB$/.test(pre))opIdx=bytes.length-1;
+  else if(pre==='ED')opIdx=bytes.indexOf(0xED)+1;
+  else{opIdx=0;while(opIdx<bytes.length-1&&(bytes[opIdx]===0xDD||bytes[opIdx]===0xFD))opIdx++;}
+  let html='';
+  bytes.forEach((b,i)=>{
+    const cls=(/^(DD|FD)CB$/.test(pre)&&i===bytes.length-2)?'bb-arg':(i<opIdx?'bb-pre':(i===opIdx?'bb-op':'bb-arg'));
+    html+=`<span class="bytebox ${cls}">${hex(b,2)}</span>`;
+  });
+  $('decBytes').innerHTML=html;
+  tx0('decMnem',d.text||'');
+  const root=(d.text||'').split(' ')[0].replace('*','');
+  tx0('decDesc',(LANG==='en'&&DESCEN[root])||DESC[root]||(root==='NOP*'?T('Opcode ED non défini : se comporte comme NOP.'):''));
+  const op=d.op|0,x=op>>6,y=(op>>3)&7,z=op&7;
+  const grp=(cap,val,n,cls)=>`<div class="bitf f-${cls}"><div class="cells">${val.toString(2).padStart(n,'0').split('').map(c=>`<span class="${c==='1'?'s1':''}">${c}</span>`).join('')}</div><div class="cap" style="color:inherit">${cap}=${val}</div></div>`;
+  $('decBits').innerHTML=grp('x',x,2,'x')+grp('y',y,3,'y')+grp('z',z,3,'z')+`<div class="mono text-[13px] dim pb-1">p=${y>>1} · q=${y&1}</div>`;
+  const tab=pre==='ED'?'ED':pre==='CB'?'CB':pre==='DD'?'DD (IX)':pre==='FD'?'FD (IY)':pre==='DDCB'?'DD CB (IX)':pre==='FDCB'?'FD CB (IY)':'Principale';
+  tx0('decTab',T(tab));tx0('decLen',(d.len|0)+' '+(LANG==='en'?(d.len>1?'bytes':'byte'):(d.len>1?'octets':'octet')));
+}
+function renderStack(){
+  const rows=S.stack||[];let html='';
+  rows.forEach((s,i)=>{
+    html+=`<div class="row" style="grid-template-columns:16px 1fr auto;padding:2px 4px;border-left-color:${i===0?'var(--pk)':'transparent'};${i===0?'background:rgba(255,43,214,.1)':''}"><span class="dim">${i===0?'▸':''}</span><span class="dim">${hex(s.addr,4)}</span><span class="hx">${hex(s.word,4)}</span></div>`;
+  });
+  $('stk').innerHTML=html;
+}
+function renderMem(){
+  if(!S.mem)return;
+  const base=S.mem.base|0,hx=S.mem.hex||'';memBase=base;
+  if($('memFollow').value!=='man'&&document.activeElement!==$('memAddr'))tx0('memAddr',hex(base,4));
+  const r=S.regs||{},pc=r.pc|0,sp=r.sp|0,hl=r.hl|0;
+  const wr=new Set(S.wlog||[]);
+  for(let row=0;row<16;row++){
+    const ad=(base+row*16)&0xFFFF;const at=hex(ad,4);if(memAd[row]._t!==at){memAd[row].textContent=at;memAd[row]._t=at;}
+    let asc='';
+    for(let c=0;c<16;c++){
+      const a=(ad+c)&0xFFFF,i=row*16+c,v=parseInt(hx.substr(i*2,2)||'00',16);
+      const t=hex(v,2);if(memTxt[i]!==t){memTxt[i]=t;memCells[i].textContent=t;}
+      let cl='mc';
+      if(a===pc)cl+=' pc';else if(a===sp)cl+=' sp';else if(a===hl)cl+=' hl';
+      if(wr.has(a)&&a!==pc)cl+=' wr';else if(!v)cl+=' z';
+      if(memCl[i]!==cl){memCl[i]=cl;memCells[i].className=cl;}
+      asc+=(v>=32&&v<127)?String.fromCharCode(v):'·';
+    }
+    if(memAsc[row]._t!==asc){memAsc[row].textContent=asc;memAsc[row]._t=asc;}
+  }
+}
+
+/* ---------- démarrage ---------- */
+applyLang();
+sizeLists();addEventListener('resize',()=>{sizeLists();sendView();render();});
+connect();
+window.__z80state=()=>S;   // pour inspection / tests
+})();
+</script>
+
+</body>
+</html>

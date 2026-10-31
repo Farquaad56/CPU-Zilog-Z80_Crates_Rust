@@ -1,0 +1,257 @@
+opcode	mnemonic	family	plan	t_min	t_max
+00	NOP*	ed_nop	F4 F4	8	8
+01	NOP*	ed_nop	F4 F4	8	8
+02	NOP*	ed_nop	F4 F4	8	8
+03	NOP*	ed_nop	F4 F4	8	8
+04	NOP*	ed_nop	F4 F4	8	8
+05	NOP*	ed_nop	F4 F4	8	8
+06	NOP*	ed_nop	F4 F4	8	8
+07	NOP*	ed_nop	F4 F4	8	8
+08	NOP*	ed_nop	F4 F4	8	8
+09	NOP*	ed_nop	F4 F4	8	8
+0A	NOP*	ed_nop	F4 F4	8	8
+0B	NOP*	ed_nop	F4 F4	8	8
+0C	NOP*	ed_nop	F4 F4	8	8
+0D	NOP*	ed_nop	F4 F4	8	8
+0E	NOP*	ed_nop	F4 F4	8	8
+0F	NOP*	ed_nop	F4 F4	8	8
+10	NOP*	ed_nop	F4 F4	8	8
+11	NOP*	ed_nop	F4 F4	8	8
+12	NOP*	ed_nop	F4 F4	8	8
+13	NOP*	ed_nop	F4 F4	8	8
+14	NOP*	ed_nop	F4 F4	8	8
+15	NOP*	ed_nop	F4 F4	8	8
+16	NOP*	ed_nop	F4 F4	8	8
+17	NOP*	ed_nop	F4 F4	8	8
+18	NOP*	ed_nop	F4 F4	8	8
+19	NOP*	ed_nop	F4 F4	8	8
+1A	NOP*	ed_nop	F4 F4	8	8
+1B	NOP*	ed_nop	F4 F4	8	8
+1C	NOP*	ed_nop	F4 F4	8	8
+1D	NOP*	ed_nop	F4 F4	8	8
+1E	NOP*	ed_nop	F4 F4	8	8
+1F	NOP*	ed_nop	F4 F4	8	8
+20	NOP*	ed_nop	F4 F4	8	8
+21	NOP*	ed_nop	F4 F4	8	8
+22	NOP*	ed_nop	F4 F4	8	8
+23	NOP*	ed_nop	F4 F4	8	8
+24	NOP*	ed_nop	F4 F4	8	8
+25	NOP*	ed_nop	F4 F4	8	8
+26	NOP*	ed_nop	F4 F4	8	8
+27	NOP*	ed_nop	F4 F4	8	8
+28	NOP*	ed_nop	F4 F4	8	8
+29	NOP*	ed_nop	F4 F4	8	8
+2A	NOP*	ed_nop	F4 F4	8	8
+2B	NOP*	ed_nop	F4 F4	8	8
+2C	NOP*	ed_nop	F4 F4	8	8
+2D	NOP*	ed_nop	F4 F4	8	8
+2E	NOP*	ed_nop	F4 F4	8	8
+2F	NOP*	ed_nop	F4 F4	8	8
+30	NOP*	ed_nop	F4 F4	8	8
+31	NOP*	ed_nop	F4 F4	8	8
+32	NOP*	ed_nop	F4 F4	8	8
+33	NOP*	ed_nop	F4 F4	8	8
+34	NOP*	ed_nop	F4 F4	8	8
+35	NOP*	ed_nop	F4 F4	8	8
+36	NOP*	ed_nop	F4 F4	8	8
+37	NOP*	ed_nop	F4 F4	8	8
+38	NOP*	ed_nop	F4 F4	8	8
+39	NOP*	ed_nop	F4 F4	8	8
+3A	NOP*	ed_nop	F4 F4	8	8
+3B	NOP*	ed_nop	F4 F4	8	8
+3C	NOP*	ed_nop	F4 F4	8	8
+3D	NOP*	ed_nop	F4 F4	8	8
+3E	NOP*	ed_nop	F4 F4	8	8
+3F	NOP*	ed_nop	F4 F4	8	8
+40	IN B,(C)	ed_in_c	F4 F4 N4:BC>L X0	12	12
+41	OUT (C),B	ed_out_c	F4 F4 X0 O4:BC<L	12	12
+42	SBC HL,BC	ed_sbc16	F4 F4 X0 I4 I3	15	15
+43	LD (nn),BC	ed_ld_nn_rp	F4 F4 R3:PC+>Z R3:PC+>W X0 W3:NN<L W3:NN+1<H	20	20
+44	NEG	ed_neg	F4 F4 X0	8	8
+45	RETN	ed_retn	F4 F4 R3:SP+>Z R3:SP+>W X0	14	14
+46	IM 0	ed_im	F4 F4 X0	8	8
+47	LD I,A	ed_ld_ir	F4 F5 X0	9	9
+48	IN C,(C)	ed_in_c	F4 F4 N4:BC>L X0	12	12
+49	OUT (C),C	ed_out_c	F4 F4 X0 O4:BC<L	12	12
+4A	ADC HL,BC	ed_adc16	F4 F4 X0 I4 I3	15	15
+4B	LD BC,(nn)	ed_ld_rp_nn	F4 F4 R3:PC+>Z R3:PC+>W R3:NN>L R3:NN+1>H X0	20	20
+4C	NEG	ed_neg	F4 F4 X0	8	8
+4D	RETI	ed_retn	F4 F4 R3:SP+>Z R3:SP+>W X0	14	14
+4E	IM 0	ed_im	F4 F4 X0	8	8
+4F	LD R,A	ed_ld_ir	F4 F5 X0	9	9
+50	IN D,(C)	ed_in_c	F4 F4 N4:BC>L X0	12	12
+51	OUT (C),D	ed_out_c	F4 F4 X0 O4:BC<L	12	12
+52	SBC HL,DE	ed_sbc16	F4 F4 X0 I4 I3	15	15
+53	LD (nn),DE	ed_ld_nn_rp	F4 F4 R3:PC+>Z R3:PC+>W X0 W3:NN<L W3:NN+1<H	20	20
+54	NEG	ed_neg	F4 F4 X0	8	8
+55	RETN	ed_retn	F4 F4 R3:SP+>Z R3:SP+>W X0	14	14
+56	IM 1	ed_im	F4 F4 X0	8	8
+57	LD A,I	ed_ld_ir	F4 F5 X0	9	9
+58	IN E,(C)	ed_in_c	F4 F4 N4:BC>L X0	12	12
+59	OUT (C),E	ed_out_c	F4 F4 X0 O4:BC<L	12	12
+5A	ADC HL,DE	ed_adc16	F4 F4 X0 I4 I3	15	15
+5B	LD DE,(nn)	ed_ld_rp_nn	F4 F4 R3:PC+>Z R3:PC+>W R3:NN>L R3:NN+1>H X0	20	20
+5C	NEG	ed_neg	F4 F4 X0	8	8
+5D	RETN	ed_retn	F4 F4 R3:SP+>Z R3:SP+>W X0	14	14
+5E	IM 2	ed_im	F4 F4 X0	8	8
+5F	LD A,R	ed_ld_ir	F4 F5 X0	9	9
+60	IN H,(C)	ed_in_c	F4 F4 N4:BC>L X0	12	12
+61	OUT (C),H	ed_out_c	F4 F4 X0 O4:BC<L	12	12
+62	SBC HL,HL	ed_sbc16	F4 F4 X0 I4 I3	15	15
+63	LD (nn),HL	ed_ld_nn_rp	F4 F4 R3:PC+>Z R3:PC+>W X0 W3:NN<L W3:NN+1<H	20	20
+64	NEG	ed_neg	F4 F4 X0	8	8
+65	RETN	ed_retn	F4 F4 R3:SP+>Z R3:SP+>W X0	14	14
+66	IM 0	ed_im	F4 F4 X0	8	8
+67	RRD	ed_rrd	F4 F4 R3:HL>L I4 X0 W3:HL<L	18	18
+68	IN L,(C)	ed_in_c	F4 F4 N4:BC>L X0	12	12
+69	OUT (C),L	ed_out_c	F4 F4 X0 O4:BC<L	12	12
+6A	ADC HL,HL	ed_adc16	F4 F4 X0 I4 I3	15	15
+6B	LD HL,(nn)	ed_ld_rp_nn	F4 F4 R3:PC+>Z R3:PC+>W R3:NN>L R3:NN+1>H X0	20	20
+6C	NEG	ed_neg	F4 F4 X0	8	8
+6D	RETN	ed_retn	F4 F4 R3:SP+>Z R3:SP+>W X0	14	14
+6E	IM 0	ed_im	F4 F4 X0	8	8
+6F	RLD	ed_rld	F4 F4 R3:HL>L I4 X0 W3:HL<L	18	18
+70	IN (C)	ed_in_c	F4 F4 N4:BC>L X0	12	12
+71	OUT (C),0	ed_out_c	F4 F4 X0 O4:BC<L	12	12
+72	SBC HL,SP	ed_sbc16	F4 F4 X0 I4 I3	15	15
+73	LD (nn),SP	ed_ld_nn_rp	F4 F4 R3:PC+>Z R3:PC+>W X0 W3:NN<L W3:NN+1<H	20	20
+74	NEG	ed_neg	F4 F4 X0	8	8
+75	RETN	ed_retn	F4 F4 R3:SP+>Z R3:SP+>W X0	14	14
+76	IM 1	ed_im	F4 F4 X0	8	8
+77	NOP*	ed_nop	F4 F4	8	8
+78	IN A,(C)	ed_in_c	F4 F4 N4:BC>L X0	12	12
+79	OUT (C),A	ed_out_c	F4 F4 X0 O4:BC<L	12	12
+7A	ADC HL,SP	ed_adc16	F4 F4 X0 I4 I3	15	15
+7B	LD SP,(nn)	ed_ld_rp_nn	F4 F4 R3:PC+>Z R3:PC+>W R3:NN>L R3:NN+1>H X0	20	20
+7C	NEG	ed_neg	F4 F4 X0	8	8
+7D	RETN	ed_retn	F4 F4 R3:SP+>Z R3:SP+>W X0	14	14
+7E	IM 2	ed_im	F4 F4 X0	8	8
+7F	NOP*	ed_nop	F4 F4	8	8
+80	NOP*	ed_nop	F4 F4	8	8
+81	NOP*	ed_nop	F4 F4	8	8
+82	NOP*	ed_nop	F4 F4	8	8
+83	NOP*	ed_nop	F4 F4	8	8
+84	NOP*	ed_nop	F4 F4	8	8
+85	NOP*	ed_nop	F4 F4	8	8
+86	NOP*	ed_nop	F4 F4	8	8
+87	NOP*	ed_nop	F4 F4	8	8
+88	NOP*	ed_nop	F4 F4	8	8
+89	NOP*	ed_nop	F4 F4	8	8
+8A	NOP*	ed_nop	F4 F4	8	8
+8B	NOP*	ed_nop	F4 F4	8	8
+8C	NOP*	ed_nop	F4 F4	8	8
+8D	NOP*	ed_nop	F4 F4	8	8
+8E	NOP*	ed_nop	F4 F4	8	8
+8F	NOP*	ed_nop	F4 F4	8	8
+90	NOP*	ed_nop	F4 F4	8	8
+91	NOP*	ed_nop	F4 F4	8	8
+92	NOP*	ed_nop	F4 F4	8	8
+93	NOP*	ed_nop	F4 F4	8	8
+94	NOP*	ed_nop	F4 F4	8	8
+95	NOP*	ed_nop	F4 F4	8	8
+96	NOP*	ed_nop	F4 F4	8	8
+97	NOP*	ed_nop	F4 F4	8	8
+98	NOP*	ed_nop	F4 F4	8	8
+99	NOP*	ed_nop	F4 F4	8	8
+9A	NOP*	ed_nop	F4 F4	8	8
+9B	NOP*	ed_nop	F4 F4	8	8
+9C	NOP*	ed_nop	F4 F4	8	8
+9D	NOP*	ed_nop	F4 F4	8	8
+9E	NOP*	ed_nop	F4 F4	8	8
+9F	NOP*	ed_nop	F4 F4	8	8
+A0	LDI	ed_block_ld	F4 F4 R3:HL>L X0 W5:DE<L X1	16	16
+A1	CPI	ed_block_cp	F4 F4 R3:HL>L X0 I5	16	16
+A2	INI	ed_block_in	F4 F5 N4:BC>L X0 W3:HL<L X1	16	16
+A3	OUTI	ed_block_out	F4 F5 R3:HL>L X0 O4:BC<L X1	16	16
+A4	NOP*	ed_nop	F4 F4	8	8
+A5	NOP*	ed_nop	F4 F4	8	8
+A6	NOP*	ed_nop	F4 F4	8	8
+A7	NOP*	ed_nop	F4 F4	8	8
+A8	LDD	ed_block_ld	F4 F4 R3:HL>L X0 W5:DE<L X1	16	16
+A9	CPD	ed_block_cp	F4 F4 R3:HL>L X0 I5	16	16
+AA	IND	ed_block_in	F4 F5 N4:BC>L X0 W3:HL<L X1	16	16
+AB	OUTD	ed_block_out	F4 F5 R3:HL>L X0 O4:BC<L X1	16	16
+AC	NOP*	ed_nop	F4 F4	8	8
+AD	NOP*	ed_nop	F4 F4	8	8
+AE	NOP*	ed_nop	F4 F4	8	8
+AF	NOP*	ed_nop	F4 F4	8	8
+B0	LDIR	ed_block_ldr	F4 F4 R3:HL>L X0 W5:DE<L X1 ?I5	16	21
+B1	CPIR	ed_block_cpr	F4 F4 R3:HL>L X0 I5 ?I5	16	21
+B2	INIR	ed_block_inr	F4 F5 N4:BC>L X0 W3:HL<L X1 ?I5	16	21
+B3	OTIR	ed_block_outr	F4 F5 R3:HL>L X0 O4:BC<L X1 ?I5	16	21
+B4	NOP*	ed_nop	F4 F4	8	8
+B5	NOP*	ed_nop	F4 F4	8	8
+B6	NOP*	ed_nop	F4 F4	8	8
+B7	NOP*	ed_nop	F4 F4	8	8
+B8	LDDR	ed_block_ldr	F4 F4 R3:HL>L X0 W5:DE<L X1 ?I5	16	21
+B9	CPDR	ed_block_cpr	F4 F4 R3:HL>L X0 I5 ?I5	16	21
+BA	INDR	ed_block_inr	F4 F5 N4:BC>L X0 W3:HL<L X1 ?I5	16	21
+BB	OTDR	ed_block_outr	F4 F5 R3:HL>L X0 O4:BC<L X1 ?I5	16	21
+BC	NOP*	ed_nop	F4 F4	8	8
+BD	NOP*	ed_nop	F4 F4	8	8
+BE	NOP*	ed_nop	F4 F4	8	8
+BF	NOP*	ed_nop	F4 F4	8	8
+C0	NOP*	ed_nop	F4 F4	8	8
+C1	NOP*	ed_nop	F4 F4	8	8
+C2	NOP*	ed_nop	F4 F4	8	8
+C3	NOP*	ed_nop	F4 F4	8	8
+C4	NOP*	ed_nop	F4 F4	8	8
+C5	NOP*	ed_nop	F4 F4	8	8
+C6	NOP*	ed_nop	F4 F4	8	8
+C7	NOP*	ed_nop	F4 F4	8	8
+C8	NOP*	ed_nop	F4 F4	8	8
+C9	NOP*	ed_nop	F4 F4	8	8
+CA	NOP*	ed_nop	F4 F4	8	8
+CB	NOP*	ed_nop	F4 F4	8	8
+CC	NOP*	ed_nop	F4 F4	8	8
+CD	NOP*	ed_nop	F4 F4	8	8
+CE	NOP*	ed_nop	F4 F4	8	8
+CF	NOP*	ed_nop	F4 F4	8	8
+D0	NOP*	ed_nop	F4 F4	8	8
+D1	NOP*	ed_nop	F4 F4	8	8
+D2	NOP*	ed_nop	F4 F4	8	8
+D3	NOP*	ed_nop	F4 F4	8	8
+D4	NOP*	ed_nop	F4 F4	8	8
+D5	NOP*	ed_nop	F4 F4	8	8
+D6	NOP*	ed_nop	F4 F4	8	8
+D7	NOP*	ed_nop	F4 F4	8	8
+D8	NOP*	ed_nop	F4 F4	8	8
+D9	NOP*	ed_nop	F4 F4	8	8
+DA	NOP*	ed_nop	F4 F4	8	8
+DB	NOP*	ed_nop	F4 F4	8	8
+DC	NOP*	ed_nop	F4 F4	8	8
+DD	NOP*	ed_nop	F4 F4	8	8
+DE	NOP*	ed_nop	F4 F4	8	8
+DF	NOP*	ed_nop	F4 F4	8	8
+E0	NOP*	ed_nop	F4 F4	8	8
+E1	NOP*	ed_nop	F4 F4	8	8
+E2	NOP*	ed_nop	F4 F4	8	8
+E3	NOP*	ed_nop	F4 F4	8	8
+E4	NOP*	ed_nop	F4 F4	8	8
+E5	NOP*	ed_nop	F4 F4	8	8
+E6	NOP*	ed_nop	F4 F4	8	8
+E7	NOP*	ed_nop	F4 F4	8	8
+E8	NOP*	ed_nop	F4 F4	8	8
+E9	NOP*	ed_nop	F4 F4	8	8
+EA	NOP*	ed_nop	F4 F4	8	8
+EB	NOP*	ed_nop	F4 F4	8	8
+EC	NOP*	ed_nop	F4 F4	8	8
+ED	NOP*	ed_nop	F4 F4	8	8
+EE	NOP*	ed_nop	F4 F4	8	8
+EF	NOP*	ed_nop	F4 F4	8	8
+F0	NOP*	ed_nop	F4 F4	8	8
+F1	NOP*	ed_nop	F4 F4	8	8
+F2	NOP*	ed_nop	F4 F4	8	8
+F3	NOP*	ed_nop	F4 F4	8	8
+F4	NOP*	ed_nop	F4 F4	8	8
+F5	NOP*	ed_nop	F4 F4	8	8
+F6	NOP*	ed_nop	F4 F4	8	8
+F7	NOP*	ed_nop	F4 F4	8	8
+F8	NOP*	ed_nop	F4 F4	8	8
+F9	NOP*	ed_nop	F4 F4	8	8
+FA	NOP*	ed_nop	F4 F4	8	8
+FB	NOP*	ed_nop	F4 F4	8	8
+FC	NOP*	ed_nop	F4 F4	8	8
+FD	NOP*	ed_nop	F4 F4	8	8
+FE	NOP*	ed_nop	F4 F4	8	8
+FF	NOP*	ed_nop	F4 F4	8	8

@@ -1,0 +1,40 @@
+# 31 - PROTOCOLE FRONTEND <-> SERVEUR (WebSocket JSON)
+
+Serveur `z80-web`: `http://127.0.0.1:8080/` sert la page (`docs/frontend/index.html`, embarquee avec `include_str!`),
+`ws://127.0.0.1:8080/ws` = WebSocket. Tous les messages sont des textes JSON. Port modifiable: `z80-web --port N`. Ecoute 127.0.0.1 uniquement.
+
+## 1. Client -> serveur
+
+| `cmd` | Champs | Effet |
+|---|---|---|
+| `hello` | - | le serveur repond `{"type":"hello","version":"<crate>"}` puis `roms` puis `state` |
+| `list_roms` | - | repond `roms` (fichiers de `tests/roms/**` reconnus: `.com`, `.cim`, `.bin`) |
+| `load` | `name` | charge la ROM listee (CP/M en 0100h pour .com/.cim, brut en 0000h pour .bin), reset |
+| `upload` | `name`, `data_b64` | idem avec des octets envoyes par la page (glisser-deposer) |
+| `run` / `pause` | - | demarre / arrete la simulation (thread serveur) |
+| `step` | `n` (defaut 1) | execute n instructions puis `state` |
+| `reset` | - | recharge la ROM courante |
+| `speed` | `idx` 0..7 | instructions par seconde: [1,4,15,60,300,3000,60000,0=turbo] |
+| `bp_add` / `bp_del` | `addr` (entier) | points d'arret |
+| `view` | `mem_base`, `dis_rows`, `trace_rows`, `stack_rows`, `follow` | fenetre d'observation (defauts 256, 40, 16, 14). `follow` in pc, sp, hl, de, bc, wr, man; `mem_base` n'est utilise que si `man` |
+| `console_clear` | - | vide la console |
+
+## 2. Serveur -> client
+
+`{"type":"roms","roms":[{"name","size","total_tests"}]}`
+
+`{"type":"state", ...}` au plus 30 fois/s pendant `run`, et immediatement apres chaque commande:
+
+```
+status: "idle"|"running"|"halted"|"done"|"bp"      n, t (entiers 64 bits), ips, mhz (nombres), tlast
+regs: {af,bc,de,hl,af2,bc2,de2,hl2,ix,iy,sp,pc,i,r,wz (entiers), iff1,iff2,im}
+bus:  {addr, data, kind: 0 fetch|1 read|2 write|3 io-read|4 io-write, pins: "0x..." (u64 de Pins, 37 bits)}
+alu:  {op (nom: ADD, ADC, SUB, SBC, AND, XOR, OR, CP, INC, DEC, ADD16, ADC16, SBC16, DAA, NEG, CPL, ...), w (8|16), a, b, c, r, f_in}                       (feature inspect: derniere operation ALU)
+dis:  [{addr, bytes:[...], text, len, pre ('' | CB | ED | DD | FD | DDCB | FDCB), op}]  dis_rows lignes a partir de PC (desassembleur du crate)
+trace:[{pc, text}]  plus recentes en premier      stack:[{addr, word}]
+mem:  {base, hex: "<512 caracteres hex>"}          wlog: [adresses ecrites recemment]
+console_delta: "texte ajoute depuis le dernier state"    tests: {ok, err, total}
+bps: [adresses]   rom: {name, size, kind: "cpm"|"raw"}
+```
+
+Regles: aucune valeur n'est calculee par la page (sauf mise en forme). Les mnemoniques viennent du crate (`disasm`). La page tolere des champs absents.

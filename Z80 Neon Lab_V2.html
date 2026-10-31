@@ -1,0 +1,1222 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Z80 Neon Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+tailwind.config = {
+  theme: { extend: {
+    fontFamily: { display: ['Orbitron','Rajdhani','sans-serif'], ui: ['Rajdhani','system-ui','sans-serif'], mono: ['"Share Tech Mono"','ui-monospace','monospace'] },
+    colors: { ink:'#07060f', panel:'#0c0a1d', line:'#2b2258', cy:'#00f0ff', pk:'#ff2bd6', ye:'#fcee0a', lm:'#39ff88', rd:'#ff3860', vi:'#8b5cff' }
+  } }
+};
+</script>
+<style>
+/* Concept : pont de commande cyberpunk, 3 colonnes de panneaux à coins coupés, bordure dégradée cyan → magenta.
+   Cyan = structure, magenta = ce qui change, jaune = PC / valeur courante. Thème unique (néon sur nuit). */
+:root{
+  --bg:#07060f; --panel:#0c0a1d; --panel2:#120f2b; --line:#2b2258;
+  --cy:#00f0ff; --pk:#ff2bd6; --ye:#fcee0a; --lm:#39ff88; --rd:#ff3860; --vi:#8b5cff;
+  --fg:#d8e4ff; --dim:#6f77a8; --off:#1a1640;
+  color-scheme: dark;
+}
+html,body{background:var(--bg); overflow:hidden;}
+#stage{position:absolute; width:2560px; height:1440px; transform-origin:0 0; left:0; top:0;}
+.fill{flex:1 1 0; min-height:0; display:flex;}
+.fill > .in{display:flex; flex-direction:column; flex:1; min-height:0; height:auto;}
+body{
+  margin:0; color:var(--fg); font-family:'Rajdhani',system-ui,sans-serif; font-size:15px;
+  position:fixed; inset:0; overflow:hidden;
+  background:
+    radial-gradient(900px 500px at 8% -5%, rgba(255,43,214,.16), transparent 60%),
+    radial-gradient(900px 600px at 100% 0%, rgba(0,240,255,.13), transparent 60%),
+    linear-gradient(rgba(139,92,255,.06) 1px, transparent 1px) 0 0/100% 34px,
+    linear-gradient(90deg, rgba(139,92,255,.06) 1px, transparent 1px) 0 0/34px 100%,
+    var(--bg);
+  background-attachment: fixed;
+}
+body::after{ /* lignes de balayage CRT */
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:50;
+  background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 3px, rgba(0,0,0,.14) 3px 4px);
+  mix-blend-mode:multiply;
+}
+.mono{font-family:'Share Tech Mono',ui-monospace,monospace;}
+.disp{font-family:'Orbitron','Rajdhani',sans-serif;}
+
+/* panneaux */
+.panel{
+  --n:14px; position:relative; padding:1px; min-width:0;
+  background:linear-gradient(135deg, var(--cy), var(--vi) 55%, var(--pk));
+  clip-path:polygon(0 0, calc(100% - var(--n)) 0, 100% var(--n), 100% 100%, var(--n) 100%, 0 calc(100% - var(--n)));
+  filter:drop-shadow(0 0 10px rgba(0,240,255,.18));
+}
+.panel > .in{
+  background:linear-gradient(180deg, var(--panel2), var(--panel) 70%); height:100%;
+  clip-path:polygon(0 0, calc(100% - var(--n)) 0, 100% var(--n), 100% 100%, var(--n) 100%, 0 calc(100% - var(--n)));
+  padding:12px 14px 14px; min-width:0;
+}
+.ptitle{
+  font-family:'Orbitron',sans-serif; font-weight:700; font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--cy); text-shadow:0 0 8px rgba(0,240,255,.7); display:flex; align-items:center; gap:8px; margin-bottom:10px;
+}
+.ptitle::before{content:""; width:8px; height:8px; background:var(--pk); box-shadow:0 0 8px var(--pk); transform:rotate(45deg);}
+.ptitle .sub{margin-left:auto; font-family:'Share Tech Mono',monospace; letter-spacing:.04em; color:var(--dim); text-shadow:none; font-weight:400; text-transform:none; font-size:12px;}
+
+.lbl{font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.14em; font-size:12px; color:var(--cy); text-transform:uppercase;}
+.hx{font-family:'Share Tech Mono',monospace; color:#fff; text-shadow:0 0 6px rgba(0,240,255,.55); font-variant-numeric:tabular-nums;}
+.dim{color:var(--dim);}
+
+/* LEDs binaires */
+.leds{display:inline-flex; gap:2px; vertical-align:middle;}
+.leds i{width:9px; height:9px; background:var(--off); border:1px solid #2a2460; display:block;}
+.leds i.on{background:var(--cy); border-color:var(--cy); box-shadow:0 0 6px var(--cy);}
+.leds.pk i.on{background:var(--pk); border-color:var(--pk); box-shadow:0 0 6px var(--pk);}
+.leds.ye i.on{background:var(--ye); border-color:var(--ye); box-shadow:0 0 6px var(--ye);}
+.leds.lm i.on{background:var(--lm); border-color:var(--lm); box-shadow:0 0 6px var(--lm);}
+.leds.sm i{width:8px; height:8px;}
+.leds i.na{opacity:.22;}
+.leds i:nth-child(4n){margin-right:3px;}
+.leds i:last-child{margin-right:0;}
+
+/* cartes registres */
+.regcard{background:rgba(0,240,255,.035); border:1px solid rgba(0,240,255,.22); padding:8px 10px 8px; min-width:0;}
+.regcard .big{font-size:26px; line-height:1.05; letter-spacing:.04em;}
+.byterow{display:flex; align-items:center; gap:8px; font-size:14px; margin-top:4px;}
+.byterow b{color:var(--pk); font-family:'Rajdhani'; width:12px; font-size:13px;}
+.chip{display:flex; flex-direction:column; gap:1px; padding:5px 8px; border:1px solid rgba(139,92,255,.35); background:rgba(139,92,255,.06); min-width:0;}
+.chip .k{font-size:11px; letter-spacing:.14em; font-weight:700; color:var(--vi); text-transform:uppercase;}
+.chip .v{font-size:16px;}
+.chip.pc{border-color:var(--ye); background:rgba(252,238,10,.07); box-shadow:0 0 12px rgba(252,238,10,.18) inset;}
+.chip.pc .k{color:var(--ye);} .chip.pc .v{color:var(--ye); text-shadow:0 0 8px rgba(252,238,10,.7);}
+
+@keyframes chgA{0%{color:var(--pk); text-shadow:0 0 14px var(--pk); transform:scale(1.06);}100%{}}
+@keyframes chgB{0%{color:var(--pk); text-shadow:0 0 14px var(--pk); transform:scale(1.06);}100%{}}
+.chgA{animation:chgA .7s ease-out; display:inline-block;}
+.chgB{animation:chgB .7s ease-out; display:inline-block;}
+
+/* flags */
+.flag{display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 0 5px; border:1px solid #2b2663; background:var(--off); color:var(--dim);}
+.flag .l{font-family:'Orbitron'; font-weight:700; font-size:15px;}
+.flag .n{font-size:9px; letter-spacing:.04em; text-transform:uppercase; text-align:center; line-height:1.05; min-height:22px; display:flex; align-items:center;}
+.flag.on{color:#001418; background:var(--cy); border-color:var(--cy); box-shadow:0 0 14px rgba(0,240,255,.7);}
+.flag.on.und{background:var(--vi); border-color:var(--vi); box-shadow:0 0 14px rgba(139,92,255,.7); color:#fff;}
+.flag.und{opacity:.85;}
+
+/* décodeur */
+.bytebox{padding:3px 8px; border:1px solid; font-family:'Share Tech Mono'; font-size:20px;}
+.bb-pre{color:var(--pk); border-color:var(--pk); text-shadow:0 0 8px var(--pk);}
+.bb-op{color:var(--cy); border-color:var(--cy); text-shadow:0 0 8px var(--cy);}
+.bb-arg{color:var(--ye); border-color:rgba(252,238,10,.6); text-shadow:0 0 8px rgba(252,238,10,.6);}
+.mnem{font-family:'Orbitron'; font-weight:700; font-size:22px; letter-spacing:.04em; color:#fff; text-shadow:0 0 12px rgba(255,43,214,.8), 0 0 2px #fff; overflow-wrap:anywhere;}
+.bitf{display:inline-flex; flex-direction:column; align-items:center; gap:2px;}
+.bitf .cells{display:flex; gap:2px;}
+.bitf .cells span{width:20px; height:24px; display:grid; place-items:center; font-family:'Share Tech Mono'; font-size:15px; border:1px solid;}
+.bitf .cap{font-size:11px; letter-spacing:.14em; font-weight:700;}
+.f-x{color:var(--vi);border-color:var(--vi);} .f-y{color:var(--cy);border-color:var(--cy);} .f-z{color:var(--pk);border-color:var(--pk);}
+.bitf .cells span.s1{background:currentColor;} .bitf .cells span.s1{color:#06040f;}
+.bitf.f-x .cells span.s1{background:var(--vi);} .bitf.f-y .cells span.s1{background:var(--cy);} .bitf.f-z .cells span.s1{background:var(--pk);}
+
+/* ALU */
+.alurow{display:grid; grid-template-columns:44px 52px 1fr; align-items:center; gap:8px; padding:3px 0;}
+.alurow .nm{color:var(--cy); font-weight:700; letter-spacing:.1em; font-size:13px;}
+.alurow .sym{color:var(--pk); font-family:'Orbitron'; margin-right:4px;}
+.aluline{height:1px; background:linear-gradient(90deg, var(--cy), var(--pk)); box-shadow:0 0 8px var(--cy); margin:4px 0;}
+.fmini{display:inline-flex; gap:2px;}
+.fmini span{width:20px; text-align:center; font-family:'Share Tech Mono'; font-size:14px; border:1px solid #2b2663; color:#4a4585; padding:1px 0;}
+.fmini span.on{color:var(--cy); border-color:var(--cy); text-shadow:0 0 6px var(--cy);}
+.fmini span.chg{border-color:var(--pk); box-shadow:0 0 8px var(--pk); color:var(--pk);}
+.fmini span.on.chg{color:#fff; background:rgba(255,43,214,.35);}
+
+/* bus */
+.sig{padding:2px 8px; font-family:'Orbitron'; font-size:10px; letter-spacing:.12em; border:1px solid #2b2663; color:#4a4585; font-weight:700;}
+.sig.on{color:#04120a; background:var(--lm); border-color:var(--lm); box-shadow:0 0 10px var(--lm);}
+.sig.on.w{background:var(--pk); border-color:var(--pk); box-shadow:0 0 10px var(--pk); color:#fff;}
+
+/* listes */
+.row{display:grid; align-items:center; gap:10px; padding:2px 6px; font-family:'Share Tech Mono'; font-size:14px; line-height:22px; border-left:2px solid transparent; white-space:nowrap;}
+.dis{grid-template-columns:14px 52px 92px 1fr; cursor:pointer;}
+.dis:hover{background:rgba(0,240,255,.07);}
+.dis.cur{background:linear-gradient(90deg, rgba(252,238,10,.18), transparent); border-left-color:var(--ye);}
+.dis .bp{width:9px; height:9px; border-radius:50%; border:1px solid #3b3480;}
+.dis.hasbp .bp{background:var(--rd); border-color:var(--rd); box-shadow:0 0 8px var(--rd);}
+.dis .a{color:var(--dim);} .dis.cur .a{color:var(--ye);}
+.dis .b{color:#7f86c4; overflow:hidden; text-overflow:ellipsis;}
+.dis .t{color:#fff; overflow:hidden; text-overflow:ellipsis;}
+.trc{grid-template-columns:34px 52px 1fr 26px;}
+.trc .a{color:var(--pk);} .trc .t{color:#c5d2ff; overflow:hidden; text-overflow:ellipsis;} .trc .c{color:var(--dim); text-align:right;}
+
+/* mémoire */
+.memwrap{overflow-x:auto;}
+.memgrid{display:grid; grid-template-columns:5ch repeat(16, 2.6ch) 17ch; column-gap:.5ch; font-family:'Share Tech Mono'; font-size:13px; line-height:1.55; width:max-content; min-width:100%;}
+.memgrid span{padding:0 1px;}
+.memgrid .ad{color:var(--dim);} .memgrid .hd{color:var(--cy); font-weight:700;}
+.memgrid .asc{color:#7f86c4; letter-spacing:.02em; white-space:pre;}
+.mc{color:#a6b2e8; text-align:center;}
+.mc.z{color:#3a3578;}
+.mc.pc{background:var(--ye); color:#000; box-shadow:0 0 10px var(--ye);}
+.mc.sp{background:var(--pk); color:#fff; box-shadow:0 0 10px var(--pk);}
+.mc.hl{outline:1px solid var(--cy); color:#fff;}
+.mc.wr{color:var(--pk); text-shadow:0 0 8px var(--pk);}
+.mc.pg{color:var(--cy);}
+
+/* puce Z80 */
+.cpu{flex:none; height:748px; display:grid; grid-template-columns:1fr 190px 1fr; align-items:stretch; background:#03020a; border:1px solid rgba(0,240,255,.25); padding:14px 10px;}
+.pins{display:grid; grid-template-rows:repeat(18,1fr); min-height:0;}
+.pin{display:flex; align-items:center; gap:0; font-family:'Share Tech Mono'; font-size:16px; color:#b9c4f5;}
+.pin.l{justify-content:flex-end;} .pin.r{justify-content:flex-start;}
+.pin .pn{padding:0 8px;} .pin.ctl .pn{color:#fff;}
+.pin .sq{width:26px; height:16px; background:#14123a; border:1px solid #3b3480; display:block;}
+.pin.on .sq{background:var(--lm); border-color:var(--lm); box-shadow:0 0 12px var(--lm);}
+.pin.on .pn{color:var(--lm); text-shadow:0 0 8px var(--lm);}
+.pin.wr.on .sq{background:var(--pk); border-color:var(--pk); box-shadow:0 0 12px var(--pk);} .pin.wr.on .pn{color:var(--pk); text-shadow:0 0 8px var(--pk);}
+.pin.hl.on .sq{background:var(--ye); border-color:var(--ye); box-shadow:0 0 12px var(--ye);} .pin.hl.on .pn{color:var(--ye); text-shadow:0 0 8px var(--ye);}
+.chipbody{margin:0; border:2px solid var(--cy); background:linear-gradient(180deg,#0b0a22,#05040f); box-shadow:0 0 22px rgba(0,240,255,.35), inset 0 0 30px rgba(139,92,255,.18); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; position:relative;}
+.chipbody::before{content:""; position:absolute; top:-1px; left:50%; width:30px; height:15px; margin-left:-15px; border:2px solid var(--cy); border-top:0; border-radius:0 0 15px 15px; background:#03020a;}
+.chipbody .nm{font-family:'Orbitron'; font-weight:900; font-size:30px; color:#fff; letter-spacing:.08em; text-shadow:0 0 14px rgba(255,43,214,.9);}
+.chipbody .nm2{font-family:'Orbitron'; font-weight:700; font-size:18px; letter-spacing:.3em; color:var(--cy); text-shadow:0 0 10px var(--cy);}
+.chipbody .zl{font-family:'Share Tech Mono'; font-size:12px; letter-spacing:.2em; color:var(--dim);}
+
+/* console */
+.term{background:#03020a; border:1px solid rgba(57,255,136,.3); color:var(--lm); text-shadow:0 0 6px rgba(57,255,136,.55);
+  font-family:'Share Tech Mono',monospace; font-size:13px; line-height:1.4; padding:10px 12px; flex:1; min-height:0; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; margin:0;}
+.term .cur{display:inline-block; width:8px; height:14px; background:var(--lm); vertical-align:-2px; animation:blink 1s steps(2) infinite;}
+@keyframes blink{50%{opacity:0;}}
+
+/* boutons */
+.btn{font-family:'Orbitron'; font-weight:700; font-size:11px; letter-spacing:.14em; text-transform:uppercase; padding:9px 14px; color:var(--cy);
+  background:rgba(0,240,255,.06); border:1px solid var(--cy); cursor:pointer; transition:.15s;
+  clip-path:polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));}
+.btn:hover{background:var(--cy); color:#001418; box-shadow:0 0 18px var(--cy);}
+.btn:focus-visible,.rom:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ye); outline-offset:2px;}
+.btn.pk{color:var(--pk); border-color:var(--pk); background:rgba(255,43,214,.07);} .btn.pk:hover{background:var(--pk); color:#fff; box-shadow:0 0 18px var(--pk);}
+.btn.ye{color:var(--ye); border-color:var(--ye); background:rgba(252,238,10,.07);} .btn.ye:hover{background:var(--ye); color:#000; box-shadow:0 0 18px var(--ye);}
+.btn.active{background:var(--pk); color:#fff; border-color:var(--pk); box-shadow:0 0 18px var(--pk);}
+.btn.sm{padding:5px 9px; font-size:10px;}
+.rom{font-family:'Orbitron'; font-size:12px; font-weight:700; letter-spacing:.1em; padding:8px 12px; border:1px solid #3b3480; color:#a6b2e8; background:var(--off); cursor:pointer; transition:.15s;}
+.rom:hover{border-color:var(--cy); color:#fff;}
+.rom.sel{border-color:var(--ye); color:var(--ye); background:rgba(252,238,10,.08); box-shadow:0 0 14px rgba(252,238,10,.3);}
+input[type=text], select{background:#05040f; color:var(--fg); border:1px solid #3b3480; font-family:'Share Tech Mono'; font-size:14px; padding:5px 8px; min-width:0;}
+input[type=range]{accent-color:var(--pk); width:100%;}
+.badge{font-family:'Orbitron'; font-weight:700; font-size:11px; letter-spacing:.2em; padding:5px 12px; border:1px solid; text-transform:uppercase;}
+.b-idle{color:var(--dim); border-color:#3b3480;}
+.b-run{color:var(--lm); border-color:var(--lm); box-shadow:0 0 14px rgba(57,255,136,.5); text-shadow:0 0 8px var(--lm);}
+.b-halt{color:var(--ye); border-color:var(--ye); box-shadow:0 0 14px rgba(252,238,10,.5);}
+.b-done{color:var(--cy); border-color:var(--cy); box-shadow:0 0 14px rgba(0,240,255,.5);}
+.b-bp{color:var(--rd); border-color:var(--rd); box-shadow:0 0 14px rgba(255,56,96,.6);}
+
+.title{font-family:'Orbitron'; font-weight:900; letter-spacing:.06em; line-height:1;
+  text-shadow:2px 0 var(--pk), -2px 0 var(--cy), 0 0 22px rgba(255,43,214,.45);}
+@keyframes flick{0%,92%,100%{opacity:1;}93%{opacity:.55;}94%{opacity:1;}96%{opacity:.7;}97%{opacity:1;}}
+.title{animation:flick 7s infinite;}
+.bar{height:8px; background:var(--off); border:1px solid #3b3480; overflow:hidden;}
+.bar > div{height:100%; width:0; background:linear-gradient(90deg,var(--cy),var(--pk)); box-shadow:0 0 12px var(--pk); transition:width .3s;}
+.drop{outline:2px dashed var(--ye); outline-offset:-8px;}
+::-webkit-scrollbar{width:9px; height:9px;} ::-webkit-scrollbar-thumb{background:#3b3480;} ::-webkit-scrollbar-track{background:#05040f;}
+@media (prefers-reduced-motion: reduce){ .title,.term .cur{animation:none;} .chgA,.chgB{animation:none;} .btn,.rom{transition:none;} }
+</style>
+
+<div id="stage">
+ <div class="flex flex-col gap-[14px] h-full p-5">
+  <!-- ===== EN-TÊTE ===== -->
+  <header class="flex gap-4 items-stretch h-[132px] shrink-0">
+    <div class="w-[560px] shrink-0 flex flex-col justify-between py-1">
+      <div class="mono text-[12px] tracking-[.3em] text-vi uppercase">Zilog · 8 bits · simulateur de ROMs de test</div>
+      <h1 class="title text-[58px] text-white">Z80<span class="text-pk">/</span><span class="text-cy">NEON</span></h1>
+      <div class="flex items-center gap-5">
+        <span id="status" class="badge b-idle">Prêt</span>
+        <div class="mono text-[13px] dim leading-tight">INSTR <span class="hx" id="sInstr">0</span><br>T-ÉTATS <span class="hx" id="sT">0</span></div>
+        <div class="mono text-[13px] dim leading-tight">VITESSE <span class="hx" id="sIps">0</span> i/s<br>ÉQUIV. <span class="hx" id="sMhz">0.00</span> MHz</div>
+      </div>
+    </div>
+    <div class="panel grow"><div class="in !py-3 flex flex-col justify-between">
+      <div class="flex items-center gap-6">
+        <div class="flex items-center gap-2" id="romBar" role="group" aria-label="ROMs de test"><span class="lbl mr-1">ROM</span></div>
+        <div class="flex items-center gap-2">
+          <button class="btn ye" id="bRun" type="button">▶ Lancer</button>
+          <button class="btn" id="bStep" type="button" title="Une instruction (touche N)">⏭ Pas</button>
+          <button class="btn" id="bStep100" type="button" title="Cent instructions">×100</button>
+          <button class="btn pk" id="bReset" type="button" title="Recharge la ROM (touche R)">⟲ Reset</button>
+          <label class="btn sm" for="file" style="cursor:pointer">📂 Fichier</label>
+          <input id="file" type="file" accept=".com,.cim,.bin,.rom" class="hidden">
+        </div>
+        <div class="flex items-center gap-3 grow min-w-0">
+          <span class="lbl">Vitesse</span>
+          <input id="speed" type="range" min="0" max="7" step="1" value="3" aria-label="Vitesse de simulation">
+          <span class="mono text-[14px] text-ye w-[70px] text-right" id="speedLbl">60/s</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="lbl">BP</span>
+          <input id="bpIn" type="text" maxlength="4" placeholder="0100" class="w-[68px]" aria-label="Adresse du point d'arrêt en hexadécimal">
+          <button class="btn sm" id="bpAdd" type="button">+</button>
+          <div id="bpList" class="flex gap-1"></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-8">
+        <div class="mono text-[13px] text-[#9aa5e0] leading-snug grow min-w-0" id="romInfo"></div>
+        <div class="flex items-center gap-3 w-[520px] shrink-0">
+          <span class="lbl whitespace-nowrap" id="progLbl">Tests</span>
+          <div class="bar grow"><div id="progBar"></div></div>
+          <span class="mono text-[14px] whitespace-nowrap"><span class="text-lm" id="nOk">0</span> ok · <span class="text-rd" id="nErr">0</span> err</span>
+        </div>
+      </div>
+    </div></div>
+  </header>
+
+  <!-- ===== 5 COLONNES ===== -->
+  <main class="flex gap-[14px] grow min-h-0">
+
+    <section class="w-[440px] shrink-0 flex flex-col gap-[14px] min-h-0">
+      <div class="panel"><div class="in">
+        <h2 class="ptitle">Registres<span class="sub">jeu principal</span></h2>
+        <div class="grid grid-cols-2 gap-2" id="regMain"></div>
+        <div class="lbl mt-3 mb-1 !text-vi">Jeu alternatif <span class="dim normal-case tracking-normal font-normal">(EXX · EX AF,AF')</span></div>
+        <div class="grid grid-cols-4 gap-2" id="regAlt"></div>
+        <div class="lbl mt-3 mb-1 !text-vi">Index · pointeurs · système</div>
+        <div class="grid grid-cols-4 gap-2" id="regSpec"></div>
+      </div></div>
+      <div class="panel"><div class="in">
+        <h2 class="ptitle">Drapeaux F<span class="sub mono" id="fBin">00000000</span></h2>
+        <div class="grid grid-cols-8 gap-[5px]" id="flags"></div>
+        <div class="mono text-[12px] dim mt-2">Violet : bits 5 et 3 non documentés, vérifiés par ZEXALL.</div>
+      </div></div>
+      <div class="panel fill"><div class="in">
+        <h2 class="ptitle">Pile<span class="sub">SP →</span></h2>
+        <div id="stk" class="flex flex-col gap-[2px] mono text-[14px] min-h-0 overflow-hidden"></div>
+      </div></div>
+    </section>
+
+    <section class="w-[440px] shrink-0 flex flex-col gap-[14px] min-h-0">
+      <div class="panel"><div class="in">
+        <h2 class="ptitle">Décodeur d'opcode<span class="sub" id="decAddr">0000</span></h2>
+        <div class="flex flex-wrap gap-2 mb-3 min-h-[40px]" id="decBytes"></div>
+        <div class="mnem" id="decMnem">—</div>
+        <div class="text-[14px] text-[#9aa5e0] mt-1 min-h-[40px] leading-snug" id="decDesc"></div>
+        <div class="flex flex-wrap items-end gap-x-4 gap-y-3 mt-3" id="decBits"></div>
+        <div class="grid grid-cols-3 gap-2 mt-3 mono text-[13px]">
+          <div class="chip"><span class="k">Table</span><span class="v" id="decTab">—</span></div>
+          <div class="chip"><span class="k">Longueur</span><span class="v" id="decLen">—</span></div>
+          <div class="chip"><span class="k">Dern. exéc.</span><span class="v" id="decT">0 T</span></div>
+        </div>
+      </div></div>
+      <div class="panel"><div class="in">
+        <h2 class="ptitle">Unité arithmétique · ALU<span class="sub" id="aluOp">—</span></h2>
+        <div class="alurow"><span class="nm">A</span><span class="hx text-[17px]" id="aluA">00</span><span class="leds" id="aluAl"></span></div>
+        <div class="alurow"><span class="nm"><span class="sym" id="aluSym">+</span>B</span><span class="hx text-[17px]" id="aluB">00</span><span class="leds pk" id="aluBl"></span></div>
+        <div class="alurow"><span class="nm">C<span class="dim">in</span></span><span class="hx text-[17px]" id="aluC">0</span><span class="mono dim text-[12px]" id="aluNote"></span></div>
+        <div class="aluline"></div>
+        <div class="alurow"><span class="nm !text-ye">=</span><span class="hx text-[17px] !text-ye" id="aluR">00</span><span class="leds ye" id="aluRl"></span></div>
+        <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 items-center mt-2 mono text-[12px]">
+          <span class="dim">F avant</span><span class="fmini" id="fmBefore"></span>
+          <span class="dim">F après</span><span class="fmini" id="fmAfter"></span>
+        </div>
+      </div></div>
+      <div class="panel fill"><div class="in !px-2">
+        <h2 class="ptitle !px-2">Trace d'exécution<span class="sub">récentes en haut</span></h2>
+        <div id="trcList" class="flex flex-col min-h-0 overflow-hidden"></div>
+      </div></div>
+    </section>
+
+    <section class="w-[440px] shrink-0 flex flex-col min-h-0">
+      <div class="panel fill"><div class="in">
+        <h2 class="ptitle">Processeur Z80<span class="sub" id="busTxt">—</span></h2>
+        <div class="flex-1 min-h-0 flex flex-col justify-center gap-4">
+          <div class="cpu" id="cpuPins"></div>
+          <div class="flex items-center justify-between mono text-[16px] px-2">
+            <span><span class="lbl">ADR</span> <span class="hx" id="busAh">0000</span></span>
+            <span><span class="lbl">DON</span> <span class="hx" id="busDh">00</span></span>
+          </div>
+          <div class="flex items-center justify-center gap-5 mono text-[12px] dim">
+            <span><i class="inline-block w-3 h-3 bg-lm align-middle mr-1"></i>actif</span>
+            <span><i class="inline-block w-3 h-3 bg-pk align-middle mr-1"></i>écriture</span>
+            <span><i class="inline-block w-3 h-3 bg-ye align-middle mr-1"></i>HALT</span>
+          </div>
+        </div>
+      </div></div>
+    </section>
+
+    <section class="w-[440px] shrink-0 flex flex-col min-h-0">
+      <div class="panel fill"><div class="in !px-2">
+        <h2 class="ptitle !px-2">Désassemblage<span class="sub">clic = point d'arrêt</span></h2>
+        <div id="disList" class="flex flex-col grow min-h-0 overflow-hidden"></div>
+      </div></div>
+    </section>
+
+    <section class="grow min-w-0 flex flex-col gap-[14px] min-h-0">
+      <div class="panel"><div class="in">
+        <h2 class="ptitle">Mémoire 64 Ko<span class="sub">PC · SP · HL · écritures</span></h2>
+        <div class="flex items-center gap-2 mb-3">
+          <select id="memFollow" aria-label="Suivi de la fenêtre mémoire">
+            <option value="pc">Suivre PC</option><option value="sp">Suivre SP</option><option value="hl">Suivre HL</option>
+            <option value="de">Suivre DE</option><option value="bc">Suivre BC</option><option value="wr">Dernière écriture</option><option value="man">Manuel</option>
+          </select>
+          <button class="btn sm" id="memPrev" type="button" aria-label="Page précédente">◀</button>
+          <input id="memAddr" type="text" maxlength="4" value="0100" class="w-[68px]" aria-label="Adresse de la fenêtre en hexadécimal">
+          <button class="btn sm" id="memNext" type="button" aria-label="Page suivante">▶</button>
+          <span class="mono text-[12px] dim ml-auto">256 octets</span>
+        </div>
+        <div class="memwrap"><div class="memgrid" id="mem"></div></div>
+      </div></div>
+      <div class="panel fill"><div class="in">
+        <h2 class="ptitle">Console CP/M<span class="sub"><button class="btn sm" id="clr" type="button">effacer</button></span></h2>
+        <pre class="term" id="term" aria-live="off"></pre>
+        <div class="mono text-[12px] dim mt-2 leading-snug">BDOS émulé : fonctions 2 et 9 en 0005h, retour CP/M en 0000h. Raccourcis : Espace · N pas · R reset. Glisser un .com / .cim / .bin pour le charger.</div>
+      </div></div>
+    </section>
+  </main>
+ </div>
+</div>
+
+<script>
+/* Z80 core + disassembleur — décodage x/y/z/p/q — flags non documentés (X,Y) inclus */
+(function (root) {
+'use strict';
+const FS=0x80,FZ=0x40,FY=0x20,FH=0x10,FX=0x08,FP=0x04,FN=0x02,FC=0x01;
+const PAR=new Uint8Array(256);
+for(let i=0;i<256;i++){let v=i,p=1;while(v){p^=v&1;v>>=1;}PAR[i]=p?FP:0;}
+const ALUN=['ADD','ADC','SUB','SBC','AND','XOR','OR','CP'];
+const ROTN=['RLC','RRC','RL','RR','SLA','SRA','SLL','SRL'];
+
+class Z80 {
+  constructor(){
+    this.mem=new Uint8Array(65536);
+    this.r=new Uint8Array(8);   // B C D E H L F A
+    this.r2=new Uint8Array(8);
+    this.hist=new Int32Array(32); this.hp=0;
+    this.wlog=new Int32Array(16); this.wp=0;
+    this.onChar=null; this.cpm=false;
+    this.reset();
+  }
+  reset(){
+    this.r.fill(0);this.r2.fill(0);this.r[7]=0xFF;this.r[6]=0xFF;
+    this.ix=0xFFFF;this.iy=0xFFFF;this.sp=0xFFFF;this.pc=0;this.i=0;this.R=0;this.wz=0;
+    this.iff1=0;this.iff2=0;this.im=0;this.halted=false;this.done=false;
+    this.t=0;this.n=0;this.tLast=0;this.ixy=0;this.tx=0;
+    this.bAddr=0;this.bData=0;this.bKind=0;this.lastPC=0;this.lastLen=1;
+    this.aOp='—';this.aW=8;this.aA=0;this.aB=0;this.aC=0;this.aR=0;this.aF=0;
+    this.hist.fill(-1);this.hp=0;this.wlog.fill(-1);this.wp=0;
+  }
+  /* --- bus --- */
+  rd(a){a&=0xFFFF;const v=this.mem[a];this.bAddr=a;this.bData=v;this.bKind=1;return v;}
+  wr(a,v){a&=0xFFFF;v&=255;this.mem[a]=v;this.bAddr=a;this.bData=v;this.bKind=2;this.wlog[this.wp++&15]=a;}
+  fetch(){const a=this.pc;const v=this.mem[a];this.bAddr=a;this.bData=v;this.bKind=0;this.pc=(a+1)&0xFFFF;this.R=(this.R&0x80)|((this.R+1)&0x7F);return v;}
+  imm8(){const a=this.pc;const v=this.mem[a];this.bAddr=a;this.bData=v;this.bKind=1;this.pc=(a+1)&0xFFFF;return v;}
+  imm16(){const l=this.imm8();return l|(this.imm8()<<8);}
+  ioIn(p){this.bAddr=p&0xFFFF;this.bData=0xFF;this.bKind=3;return 0xFF;}
+  ioOut(p,v){this.bAddr=p&0xFFFF;this.bData=v&255;this.bKind=4;}
+  push(v){this.sp=(this.sp-1)&0xFFFF;this.wr(this.sp,v>>8);this.sp=(this.sp-1)&0xFFFF;this.wr(this.sp,v&255);}
+  pop(){const l=this.rd(this.sp);this.sp=(this.sp+1)&0xFFFF;const h=this.rd(this.sp);this.sp=(this.sp+1)&0xFFFF;return l|(h<<8);}
+  /* --- registres --- */
+  get AF(){return this.r[7]<<8|this.r[6];} get BC(){return this.r[0]<<8|this.r[1];}
+  get DE(){return this.r[2]<<8|this.r[3];} get HL(){return this.r[4]<<8|this.r[5];}
+  get AF2(){return this.r2[7]<<8|this.r2[6];} get BC2(){return this.r2[0]<<8|this.r2[1];}
+  get DE2(){return this.r2[2]<<8|this.r2[3];} get HL2(){return this.r2[4]<<8|this.r2[5];}
+  hl(){return this.ixy===0?(this.r[4]<<8|this.r[5]):this.ixy===1?this.ix:this.iy;}
+  setHl(v){v&=0xFFFF;if(this.ixy===0){this.r[4]=v>>8;this.r[5]=v&255;}else if(this.ixy===1)this.ix=v;else this.iy=v;}
+  rp(p){const r=this.r;switch(p){case 0:return r[0]<<8|r[1];case 1:return r[2]<<8|r[3];case 2:return this.hl();default:return this.sp;}}
+  setRp(p,v){v&=0xFFFF;const r=this.r;switch(p){case 0:r[0]=v>>8;r[1]=v&255;break;case 1:r[2]=v>>8;r[3]=v&255;break;case 2:this.setHl(v);break;default:this.sp=v;}}
+  rp2(p){return p===3?(this.r[7]<<8|this.r[6]):this.rp(p);}
+  setRp2(p,v){if(p===3){this.r[7]=v>>8;this.r[6]=v&255;}else this.setRp(p,v);}
+  g8(i){if(this.ixy){if(i===4)return(this.ixy===1?this.ix:this.iy)>>8;if(i===5)return(this.ixy===1?this.ix:this.iy)&255;}return this.r[i];}
+  s8(i,v){if(this.ixy&&(i===4||i===5)){const w=this.ixy===1?this.ix:this.iy;const n=i===4?((w&255)|(v<<8)):((w&0xFF00)|v);if(this.ixy===1)this.ix=n;else this.iy=n;return;}this.r[i]=v;}
+  ea(){
+    if(this.ixy===0)return(this.r[4]<<8)|this.r[5];
+    const d=this.imm8();const sd=d<128?d:d-256;
+    const a=((this.ixy===1?this.ix:this.iy)+sd)&0xFFFF;this.wz=a;this.tx+=8;return a;
+  }
+  cond(cc){const f=this.r[6];switch(cc){case 0:return!(f&FZ);case 1:return!!(f&FZ);case 2:return!(f&FC);case 3:return!!(f&FC);case 4:return!(f&FP);case 5:return!!(f&FP);case 6:return!(f&FS);default:return!!(f&FS);}}
+  /* --- ALU --- */
+  alu(y,v){
+    const r=this.r,a=r[7],f=r[6];let res,nf;
+    this.aOp=ALUN[y];this.aW=8;this.aA=a;this.aB=v;this.aC=(y===1||y===3)?(f&1):0;this.aF=f;
+    switch(y){
+      case 0:case 1:{const c=y&&(f&1);const t=a+v+c;res=t&255;nf=(res&0xA8)|(res?0:FZ)|((a^v^res)&FH)|(((a^res)&(v^res)&0x80)?FP:0)|(t>>8);break;}
+      case 2:case 3:case 7:{const c=y===3?(f&1):0;const t=a-v-c;res=t&255;const xy=y===7?v:res;nf=(xy&0x28)|(res&0x80)|(res?0:FZ)|((a^v^res)&FH)|(((a^v)&(a^res)&0x80)?FP:0)|FN|((t>>8)&1);break;}
+      case 4:res=a&v;nf=(res&0xA8)|(res?0:FZ)|FH|PAR[res];break;
+      case 5:res=a^v;nf=(res&0xA8)|(res?0:FZ)|PAR[res];break;
+      default:res=a|v;nf=(res&0xA8)|(res?0:FZ)|PAR[res];
+    }
+    this.aR=res;r[6]=nf;if(y!==7)r[7]=res;
+  }
+  inc8(v){const f=this.r[6];const res=(v+1)&255;this.aOp='INC';this.aW=8;this.aA=v;this.aB=1;this.aC=0;this.aR=res;this.aF=f;
+    this.r[6]=(f&FC)|(res&0xA8)|(res?0:FZ)|((res&15)===0?FH:0)|(res===0x80?FP:0);return res;}
+  dec8(v){const f=this.r[6];const res=(v-1)&255;this.aOp='DEC';this.aW=8;this.aA=v;this.aB=1;this.aC=0;this.aR=res;this.aF=f;
+    this.r[6]=(f&FC)|(res&0xA8)|(res?0:FZ)|((res&15)===15?FH:0)|(res===0x7F?FP:0)|FN;return res;}
+  rot(y,v){
+    let c,res;
+    switch(y){
+      case 0:c=v>>7;res=((v<<1)|c)&255;break;
+      case 1:c=v&1;res=(v>>1)|(c<<7);break;
+      case 2:c=v>>7;res=((v<<1)|(this.r[6]&1))&255;break;
+      case 3:c=v&1;res=(v>>1)|((this.r[6]&1)<<7);break;
+      case 4:c=v>>7;res=(v<<1)&255;break;
+      case 5:c=v&1;res=(v>>1)|(v&0x80);break;
+      case 6:c=v>>7;res=((v<<1)|1)&255;break;
+      default:c=v&1;res=v>>1;
+    }
+    this.aOp=ROTN[y];this.aW=8;this.aA=v;this.aB=0;this.aC=this.r[6]&1;this.aR=res;this.aF=this.r[6];
+    this.r[6]=(res&0xA8)|(res?0:FZ)|PAR[res]|c;return res;
+  }
+  add16(a,b){const t=a+b;const res=t&0xFFFF;const f=this.r[6];this.aOp='ADD16';this.aW=16;this.aA=a;this.aB=b;this.aC=0;this.aR=res;this.aF=f;
+    this.r[6]=(f&(FS|FZ|FP))|((res>>8)&(FY|FX))|(((a^b^res)>>8)&FH)|((t>>16)&1);this.wz=(a+1)&0xFFFF;return res;}
+  adc16(a,b){const c=this.r[6]&1;const t=a+b+c;const res=t&0xFFFF;this.aOp='ADC16';this.aW=16;this.aA=a;this.aB=b;this.aC=c;this.aR=res;this.aF=this.r[6];
+    this.r[6]=((res>>8)&(FS|FY|FX))|(res?0:FZ)|(((a^b^res)>>8)&FH)|((~(a^b)&(a^res)&0x8000)?FP:0)|((t>>16)&1);this.wz=(a+1)&0xFFFF;return res;}
+  sbc16(a,b){const c=this.r[6]&1;const t=a-b-c;const res=t&0xFFFF;this.aOp='SBC16';this.aW=16;this.aA=a;this.aB=b;this.aC=c;this.aR=res;this.aF=this.r[6];
+    this.r[6]=((res>>8)&(FS|FY|FX))|(res?0:FZ)|(((a^b^res)>>8)&FH)|(((a^b)&(a^res)&0x8000)?FP:0)|FN|((t>>16)&1);this.wz=(a+1)&0xFFFF;return res;}
+  daa(){
+    const r=this.r,A=r[7],f=r[6];let add=0,c=0;
+    if((f&FH)||(A&15)>9)add|=6;
+    if((f&FC)||A>0x99){add|=0x60;c=1;}
+    const res=(f&FN)?(A-add)&255:(A+add)&255;
+    const h=(f&FN)?(((f&FH)&&(A&15)<6)?FH:0):((A&15)>9?FH:0);
+    this.aOp='DAA';this.aW=8;this.aA=A;this.aB=add;this.aC=0;this.aR=res;this.aF=f;
+    r[7]=res;r[6]=(res&0xA8)|(res?0:FZ)|PAR[res]|(f&FN)|h|c;
+  }
+  /* --- pas d'exécution --- */
+  step(){
+    if(this.cpm){
+      if(this.pc===5){this.bdos();return this.tLast=17;}
+      if(this.pc===0){this.done=true;return 0;}
+    }
+    this.hist[this.hp++&31]=this.pc;this.lastPC=this.pc;
+    this.ixy=0;this.tx=0;let tt=0;
+    let t;
+    if(this.halted){this.R=(this.R&0x80)|((this.R+1)&0x7F);t=4;}
+    else{
+      let op=this.fetch();
+      while(op===0xDD||op===0xFD){this.ixy=op===0xDD?1:2;tt+=4;op=this.fetch();}
+      if(op===0xED){this.ixy=0;t=this.execED();}
+      else if(op===0xCB)t=this.execCB();
+      else t=this.execMain(op)+this.tx;
+    }
+    t+=tt;this.t+=t;this.n++;this.tLast=t;
+    this.lastLen=(this.pc-this.lastPC)&0xFFFF;
+    return t;
+  }
+  bdos(){
+    const c=this.r[1];
+    if(c===2){if(this.onChar)this.onChar(this.r[3]);}
+    else if(c===9){let a=this.DE,k=0;while(this.mem[a]!==0x24&&k++<65536){if(this.onChar)this.onChar(this.mem[a]);a=(a+1)&0xFFFF;}}
+    this.pc=this.pop();this.t+=17;this.n++;
+  }
+  execMain(op){
+    const r=this.r,x=op>>6,y=(op>>3)&7,z=op&7,p=y>>1,q=y&1;
+    let t=4;
+    switch(x){
+    case 0:
+      switch(z){
+      case 0:
+        switch(y){
+          case 0:break;
+          case 1:{let k=r[7];r[7]=this.r2[7];this.r2[7]=k;k=r[6];r[6]=this.r2[6];this.r2[6]=k;break;}
+          case 2:{const d=this.imm8();r[0]=(r[0]-1)&255;if(r[0]){this.pc=(this.pc+(d<128?d:d-256))&0xFFFF;this.wz=this.pc;t=13;}else t=8;break;}
+          case 3:{const d=this.imm8();this.pc=(this.pc+(d<128?d:d-256))&0xFFFF;this.wz=this.pc;t=12;break;}
+          default:{const d=this.imm8();if(this.cond(y-4)){this.pc=(this.pc+(d<128?d:d-256))&0xFFFF;this.wz=this.pc;t=12;}else t=7;}
+        }
+        break;
+      case 1:
+        if(q===0){this.setRp(p,this.imm16());t=10;}
+        else{this.setHl(this.add16(this.hl(),this.rp(p)));t=11;}
+        break;
+      case 2:{
+        switch(y){
+          case 0:this.wr(this.BC,r[7]);this.wz=((this.BC+1)&255)|(r[7]<<8);t=7;break;
+          case 1:r[7]=this.rd(this.BC);this.wz=(this.BC+1)&0xFFFF;t=7;break;
+          case 2:this.wr(this.DE,r[7]);this.wz=((this.DE+1)&255)|(r[7]<<8);t=7;break;
+          case 3:r[7]=this.rd(this.DE);this.wz=(this.DE+1)&0xFFFF;t=7;break;
+          case 4:{const a=this.imm16();const h=this.hl();this.wr(a,h&255);this.wr(a+1,h>>8);this.wz=(a+1)&0xFFFF;t=16;break;}
+          case 5:{const a=this.imm16();this.setHl(this.rd(a)|(this.rd(a+1)<<8));this.wz=(a+1)&0xFFFF;t=16;break;}
+          case 6:{const a=this.imm16();this.wr(a,r[7]);this.wz=((a+1)&255)|(r[7]<<8);t=13;break;}
+          default:{const a=this.imm16();r[7]=this.rd(a);this.wz=(a+1)&0xFFFF;t=13;}
+        }
+        break;}
+      case 3:
+        this.setRp(p,q?this.rp(p)-1:this.rp(p)+1);t=6;break;
+      case 4:
+        if(y===6){const a=this.ea();this.wr(a,this.inc8(this.rd(a)));t=11;}
+        else{this.s8(y,this.inc8(this.g8(y)));}
+        break;
+      case 5:
+        if(y===6){const a=this.ea();this.wr(a,this.dec8(this.rd(a)));t=11;}
+        else{this.s8(y,this.dec8(this.g8(y)));}
+        break;
+      case 6:
+        if(y===6){const a=this.ea();const n=this.imm8();this.wr(a,n);t=10;if(this.ixy)this.tx-=3;}
+        else{this.s8(y,this.imm8());t=7;}
+        break;
+      default:{
+        const f=r[6];let A=r[7],c;
+        switch(y){
+          case 0:c=A>>7;A=((A<<1)|c)&255;r[7]=A;r[6]=(f&(FS|FZ|FP))|(A&0x28)|c;this.aOp='RLCA';break;
+          case 1:c=A&1;A=(A>>1)|(c<<7);r[7]=A;r[6]=(f&(FS|FZ|FP))|(A&0x28)|c;this.aOp='RRCA';break;
+          case 2:c=A>>7;A=((A<<1)|(f&1))&255;r[7]=A;r[6]=(f&(FS|FZ|FP))|(A&0x28)|c;this.aOp='RLA';break;
+          case 3:c=A&1;A=(A>>1)|((f&1)<<7);r[7]=A;r[6]=(f&(FS|FZ|FP))|(A&0x28)|c;this.aOp='RRA';break;
+          case 4:this.daa();break;
+          case 5:A^=255;r[7]=A;r[6]=(f&(FS|FZ|FP|FC))|FH|FN|(A&0x28);this.aOp='CPL';break;
+          case 6:r[6]=(f&(FS|FZ|FP))|FC|(A&0x28);this.aOp='SCF';break;
+          default:r[6]=(f&(FS|FZ|FP))|((f&FC)?FH:FC)|(A&0x28);this.aOp='CCF';
+        }
+        if(y<4||y>3&&y!==4){this.aW=8;this.aA=A;this.aB=0;this.aC=f&1;this.aR=r[7];this.aF=f;}
+      }
+      }
+      break;
+    case 1:
+      if(op===0x76){this.halted=true;this.pc=(this.pc-1)&0xFFFF;break;}
+      if(y===6){const a=this.ea();this.wr(a,r[z]);t=7;}
+      else if(z===6){const a=this.ea();r[y]=this.rd(a);t=7;}
+      else this.s8(y,this.g8(z));
+      break;
+    case 2:
+      if(z===6){const a=this.ea();this.alu(y,this.rd(a));t=7;}
+      else this.alu(y,this.g8(z));
+      break;
+    default:
+      switch(z){
+      case 0:
+        if(this.cond(y)){this.pc=this.pop();this.wz=this.pc;t=11;}else t=5;break;
+      case 1:
+        if(q===0){this.setRp2(p,this.pop());t=10;}
+        else switch(p){
+          case 0:this.pc=this.pop();this.wz=this.pc;t=10;break;
+          case 1:for(let k=0;k<6;k++){const v=r[k];r[k]=this.r2[k];this.r2[k]=v;}break;
+          case 2:this.pc=this.hl();break;
+          default:this.sp=this.hl();t=6;
+        }
+        break;
+      case 2:{const a=this.imm16();this.wz=a;if(this.cond(y))this.pc=a;t=10;break;}
+      case 3:
+        switch(y){
+          case 0:this.pc=this.imm16();this.wz=this.pc;t=10;break;
+          case 2:{const n=this.imm8();const port=(r[7]<<8)|n;this.ioOut(port,r[7]);this.wz=((n+1)&255)|(r[7]<<8);t=11;break;}
+          case 3:{const n=this.imm8();const port=(r[7]<<8)|n;r[7]=this.ioIn(port);this.wz=(port+1)&0xFFFF;t=11;break;}
+          case 4:{const lo=this.rd(this.sp),hi=this.rd(this.sp+1);const h=this.hl();this.wr(this.sp+1,h>>8);this.wr(this.sp,h&255);this.setHl(lo|(hi<<8));this.wz=lo|(hi<<8);t=19;break;}
+          case 5:{let k=r[2];r[2]=r[4];r[4]=k;k=r[3];r[3]=r[5];r[5]=k;break;}
+          case 6:this.iff1=this.iff2=0;break;
+          default:this.iff1=this.iff2=1;
+        }
+        break;
+      case 4:{const a=this.imm16();this.wz=a;if(this.cond(y)){this.push(this.pc);this.pc=a;t=17;}else t=10;break;}
+      case 5:
+        if(q===0){this.push(this.rp2(p));t=11;}
+        else{const a=this.imm16();this.push(this.pc);this.pc=a;this.wz=a;t=17;}
+        break;
+      case 6:this.alu(y,this.imm8());t=7;break;
+      default:this.push(this.pc);this.pc=y*8;this.wz=this.pc;t=11;
+      }
+    }
+    return t;
+  }
+  execCB(){
+    const r=this.r;let a=0,op,val;
+    if(this.ixy){
+      const d=this.imm8();const sd=d<128?d:d-256;
+      a=((this.ixy===1?this.ix:this.iy)+sd)&0xFFFF;this.wz=a;
+      op=this.imm8();val=this.rd(a);
+    }else{op=this.fetch();val=(op&7)===6?this.rd(this.HL):r[op&7];}
+    const x=op>>6,y=(op>>3)&7,z=op&7;
+    if(x===1){
+      const bit=val&(1<<y);const f=r[6];
+      const xy=this.ixy?(a>>8):(z===6?(this.wz>>8):val);
+      this.aOp='BIT';this.aW=8;this.aA=val;this.aB=1<<y;this.aC=0;this.aR=bit;this.aF=f;
+      r[6]=(f&FC)|FH|(xy&0x28)|(bit?0:(FZ|FP))|((y===7&&bit)?FS:0);
+      return this.ixy?16:(z===6?12:8);
+    }
+    let res;
+    if(x===0)res=this.rot(y,val);
+    else if(x===2)res=val&~(1<<y);
+    else res=val|(1<<y);
+    if(x!==0){this.aOp=x===2?'RES':'SET';this.aW=8;this.aA=val;this.aB=1<<y;this.aC=0;this.aR=res;this.aF=r[6];}
+    if(this.ixy){this.wr(a,res);if(z!==6)r[z]=res;return 19;}
+    if(z===6){this.wr(this.HL,res);return 15;}
+    r[z]=res;return 8;
+  }
+  execED(){
+    const r=this.r;const op=this.fetch();
+    const x=op>>6,y=(op>>3)&7,z=op&7,p=y>>1,q=y&1;
+    if(x===1){
+      switch(z){
+      case 0:{const v=this.ioIn(this.BC);const f=r[6];r[6]=(f&FC)|(v&0xA8)|(v?0:FZ)|PAR[v];if(y!==6)r[y]=v;this.wz=(this.BC+1)&0xFFFF;return 12;}
+      case 1:this.ioOut(this.BC,y===6?0:r[y]);this.wz=(this.BC+1)&0xFFFF;return 12;
+      case 2:{const h=this.HL;const v=this.rp(p);const res=q?this.adc16(h,v):this.sbc16(h,v);this.setHl(res);return 15;}
+      case 3:{const a=this.imm16();
+        if(q===0){const v=this.rp(p);this.wr(a,v&255);this.wr(a+1,v>>8);}
+        else this.setRp(p,this.rd(a)|(this.rd(a+1)<<8));
+        this.wz=(a+1)&0xFFFF;return 20;}
+      case 4:{const A=r[7];this.aOp='NEG';this.aW=8;this.aA=0;this.aB=A;this.aC=0;this.aF=r[6];
+        const res=(-A)&255;this.aR=res;
+        r[6]=(res&0xA8)|(res?0:FZ)|((0^A^res)&FH)|(A===0x80?FP:0)|FN|(A?FC:0);r[7]=res;return 8;}
+      case 5:this.pc=this.pop();this.wz=this.pc;this.iff1=this.iff2;return 14;
+      case 6:this.im=[0,0,1,2,0,0,1,2][y];return 8;
+      default:
+        switch(y){
+          case 0:this.i=r[7];return 9;
+          case 1:this.R=r[7];return 9;
+          case 2:case 3:{const v=y===2?this.i:this.R;r[7]=v;r[6]=(r[6]&FC)|(v&0xA8)|(v?0:FZ)|(this.iff2?FP:0);return 9;}
+          case 4:{const m=this.rd(this.HL);const A=r[7];this.wr(this.HL,((A<<4)|(m>>4))&255);const n=(A&0xF0)|(m&15);r[7]=n;
+            this.aOp='RRD';this.aW=8;this.aA=A;this.aB=m;this.aC=0;this.aR=n;this.aF=r[6];
+            r[6]=(r[6]&FC)|(n&0xA8)|(n?0:FZ)|PAR[n];this.wz=(this.HL+1)&0xFFFF;return 18;}
+          case 5:{const m=this.rd(this.HL);const A=r[7];this.wr(this.HL,((m<<4)|(A&15))&255);const n=(A&0xF0)|(m>>4);r[7]=n;
+            this.aOp='RLD';this.aW=8;this.aA=A;this.aB=m;this.aC=0;this.aR=n;this.aF=r[6];
+            r[6]=(r[6]&FC)|(n&0xA8)|(n?0:FZ)|PAR[n];this.wz=(this.HL+1)&0xFFFF;return 18;}
+          default:return 8;
+        }
+      }
+    }
+    if(x===2&&z<4&&y>=4)return this.block(y,z);
+    return 8;
+  }
+  block(y,z){
+    const r=this.r;const dec=(y&1)===1,rep=y>=6;
+    const inc=dec?-1:1;let t=16;
+    const hl=this.HL;
+    if(z===0){
+      const v=this.rd(hl);this.wr(this.DE,v);
+      this.setHl2(hl+inc);this.setDE(this.DE+inc);this.setBC(this.BC-1);
+      const n=(v+r[7])&255;
+      r[6]=(r[6]&(FS|FZ|FC))|(n&8)|((n&2)<<4)|(this.BC?FP:0);
+      this.aOp=dec?'LDD':'LDI';this.aW=8;this.aA=r[7];this.aB=v;this.aC=0;this.aR=n;this.aF=r[6];
+      if(rep&&this.BC){this.pc=(this.pc-2)&0xFFFF;this.wz=(this.pc+1)&0xFFFF;t=21;}
+    }else if(z===1){
+      const v=this.rd(hl);const A=r[7];const res=(A-v)&255;const h=(A^v^res)&FH;
+      this.setHl2(hl+inc);this.setBC(this.BC-1);
+      const n=(res-(h?1:0))&255;
+      r[6]=(r[6]&FC)|FN|(res&0x80)|(res?0:FZ)|h|(n&8)|((n&2)<<4)|(this.BC?FP:0);
+      this.aOp=dec?'CPD':'CPI';this.aW=8;this.aA=A;this.aB=v;this.aC=0;this.aR=res;this.aF=r[6];
+      this.wz=(this.wz+inc)&0xFFFF;
+      if(rep&&this.BC&&res){this.pc=(this.pc-2)&0xFFFF;this.wz=(this.pc+1)&0xFFFF;t=21;}
+    }else if(z===2){
+      const v=this.ioIn(this.BC);this.wr(hl,v);
+      r[0]=(r[0]-1)&255;this.setHl2(hl+inc);
+      const k=v+((r[1]+inc)&255);
+      r[6]=(r[0]&0xA8)|(r[0]?0:FZ)|((v&0x80)?FN:0)|(k>255?(FH|FC):0)|PAR[(k&7)^r[0]];
+      if(rep&&r[0]){this.pc=(this.pc-2)&0xFFFF;t=21;}
+    }else{
+      const v=this.rd(hl);r[0]=(r[0]-1)&255;this.ioOut(this.BC,v);this.setHl2(hl+inc);
+      const k=v+r[5];
+      r[6]=(r[0]&0xA8)|(r[0]?0:FZ)|((v&0x80)?FN:0)|(k>255?(FH|FC):0)|PAR[(k&7)^r[0]];
+      if(rep&&r[0]){this.pc=(this.pc-2)&0xFFFF;t=21;}
+    }
+    return t;
+  }
+  setHl2(v){v&=0xFFFF;this.r[4]=v>>8;this.r[5]=v&255;}
+  setDE(v){v&=0xFFFF;this.r[2]=v>>8;this.r[3]=v&255;}
+  setBC(v){v&=0xFFFF;this.r[0]=v>>8;this.r[1]=v&255;}
+  /* --- chargement ROM CP/M (.com / .cim chargés en 0x0100) --- */
+  loadCPM(bytes,addr=0x100){
+    this.reset();this.mem.fill(0);
+    this.mem[0]=0x76;this.mem[5]=0xC9;this.mem[6]=0x00;this.mem[7]=0xFE;
+    this.mem.set(bytes.subarray(0,Math.min(bytes.length,0xFE00-addr)),addr);
+    this.pc=addr;this.sp=0xFFFE;this.cpm=true;this.progStart=addr;this.progLen=bytes.length;
+  }
+  loadRaw(bytes,addr=0){
+    this.reset();this.mem.fill(0);this.mem.set(bytes.subarray(0,Math.min(bytes.length,65536-addr)),addr);
+    this.pc=addr;this.sp=0xFFFF;this.cpm=false;this.progStart=addr;this.progLen=bytes.length;
+  }
+}
+
+/* ---------- Désassembleur ---------- */
+const R8=['B','C','D','E','H','L','(HL)','A'],RPN=['BC','DE','HL','SP'],RP2N=['BC','DE','HL','AF'];
+const CCN=['NZ','Z','NC','C','PO','PE','P','M'];
+const ALUD=['ADD A,','ADC A,','SUB ','SBC A,','AND ','XOR ','OR ','CP '];
+const h2=v=>v.toString(16).toUpperCase().padStart(2,'0'),h4=v=>v.toString(16).toUpperCase().padStart(4,'0');
+const ACC=['RLCA','RRCA','RLA','RRA','DAA','CPL','SCF','CCF'];
+const EDX1_2=['LD (nn),BC','LD BC,(nn)'];
+function disasm(rb,pc){
+  let p=pc;const nb=()=>rb((p++)&0xFFFF);const nw=()=>{const l=nb();return l|(nb()<<8);};
+  let ix='',b=nb(),pre='';
+  while(b===0xDD||b===0xFD){ix=b===0xDD?'IX':'IY';pre=ix==='IX'?'DD':'FD';b=nb();}
+  const hl=ix||'HL';
+  const rn=i=>(i===4&&ix)?ix+'H':(i===5&&ix)?ix+'L':R8[i];
+  const memop=()=>{if(!ix)return'(HL)';const d=nb();const sd=d<128?d:d-256;return`(${ix}${sd<0?'-':'+'}0x${h2(Math.abs(sd))})`;};
+  const res=(text,op)=>({text,op,pre,len:(p-pc)&0xFFFF,addr:pc});
+  if(b===0xED){
+    const op=nb();const x=op>>6,y=(op>>3)&7,z=op&7,pp=y>>1,q=y&1;pre='ED';
+    if(x===1){
+      switch(z){
+        case 0:return res(y===6?'IN (C)':`IN ${R8[y]},(C)`,op);
+        case 1:return res(y===6?'OUT (C),0':`OUT (C),${R8[y]}`,op);
+        case 2:return res(`${q?'ADC':'SBC'} HL,${RPN[pp]}`,op);
+        case 3:{const a=nw();return res(q?`LD ${RPN[pp]},(0x${h4(a)})`:`LD (0x${h4(a)}),${RPN[pp]}`,op);}
+        case 4:return res('NEG',op);
+        case 5:return res(y===1?'RETI':'RETN',op);
+        case 6:return res(`IM ${[0,0,1,2,0,0,1,2][y]}`,op);
+        default:return res(['LD I,A','LD R,A','LD A,I','LD A,R','RRD','RLD','NOP','NOP'][y],op);
+      }
+    }
+    if(x===2&&z<4&&y>=4){
+      const nm=[['LDI','CPI','INI','OUTI'],['LDD','CPD','IND','OUTD'],['LDIR','CPIR','INIR','OTIR'],['LDDR','CPDR','INDR','OTDR']][y-4][z];
+      return res(nm,op);
+    }
+    return res('NOP*',op);
+  }
+  if(b===0xCB){
+    pre=(pre||'')+'CB';let d=null;
+    if(ix){const dd=nb();d=dd<128?dd:dd-256;}
+    const op=nb();const x=op>>6,y=(op>>3)&7,z=op&7;
+    const tgt=ix?`(${ix}${d<0?'-':'+'}0x${h2(Math.abs(d))})`:R8[z];
+    const extra=(ix&&z!==6)?','+R8[z]:'';
+    if(x===0)return res(`${ROTN[y]} ${tgt}${extra}`,op);
+    return res(`${['','BIT','RES','SET'][x]} ${y},${tgt}${extra}`,op);
+  }
+  const x=b>>6,y=(b>>3)&7,z=b&7,pp=y>>1,q=y&1;
+  const rel=()=>{const d=nb();const sd=d<128?d:d-256;return'0x'+h4((p+sd)&0xFFFF);};
+  switch(x){
+  case 0:
+    switch(z){
+      case 0:
+        if(y===0)return res('NOP',b);
+        if(y===1)return res("EX AF,AF'",b);
+        if(y===2)return res('DJNZ '+rel(),b);
+        if(y===3)return res('JR '+rel(),b);
+        return res(`JR ${CCN[y-4]},${rel()}`,b);
+      case 1:
+        if(q===0){const n=nw();return res(`LD ${pp===2?hl:RPN[pp]},0x${h4(n)}`,b);}
+        return res(`ADD ${hl},${pp===2?hl:RPN[pp]}`,b);
+      case 2:{
+        switch(y){
+          case 0:return res('LD (BC),A',b);case 1:return res('LD A,(BC)',b);
+          case 2:return res('LD (DE),A',b);case 3:return res('LD A,(DE)',b);
+          case 4:return res(`LD (0x${h4(nw())}),${hl}`,b);
+          case 5:return res(`LD ${hl},(0x${h4(nw())})`,b);
+          case 6:return res(`LD (0x${h4(nw())}),A`,b);
+          default:return res(`LD A,(0x${h4(nw())})`,b);
+        }}
+      case 3:return res(`${q?'DEC':'INC'} ${pp===2?hl:RPN[pp]}`,b);
+      case 4:return y===6?res(`INC ${memop()}`,b):res(`INC ${rn(y)}`,b);
+      case 5:return y===6?res(`DEC ${memop()}`,b):res(`DEC ${rn(y)}`,b);
+      case 6:
+        if(y===6){const m=memop();const n=nb();return res(`LD ${m},0x${h2(n)}`,b);}
+        return res(`LD ${rn(y)},0x${h2(nb())}`,b);
+      default:return res(ACC[y],b);
+    }
+  case 1:
+    if(b===0x76)return res('HALT',b);
+    if(y===6){const m=memop();return res(`LD ${m},${R8[z]}`,b);}
+    if(z===6){const m=memop();return res(`LD ${R8[y]},${m}`,b);}
+    return res(`LD ${rn(y)},${rn(z)}`,b);
+  case 2:
+    if(z===6)return res(ALUD[y]+memop(),b);
+    return res(ALUD[y]+rn(z),b);
+  default:
+    switch(z){
+      case 0:return res('RET '+CCN[y],b);
+      case 1:
+        if(q===0)return res('POP '+(pp===2?hl:RP2N[pp]),b);
+        return res(['RET','EXX',`JP (${hl})`,`LD SP,${hl}`][pp],b);
+      case 2:return res(`JP ${CCN[y]},0x${h4(nw())}`,b);
+      case 3:
+        switch(y){
+          case 0:return res(`JP 0x${h4(nw())}`,b);
+          case 2:return res(`OUT (0x${h2(nb())}),A`,b);
+          case 3:return res(`IN A,(0x${h2(nb())})`,b);
+          case 4:return res(`EX (SP),${hl}`,b);
+          case 5:return res('EX DE,HL',b);
+          case 6:return res('DI',b);
+          default:return res('EI',b);
+        }
+      case 4:return res(`CALL ${CCN[y]},0x${h4(nw())}`,b);
+      case 5:
+        if(q===0)return res('PUSH '+(pp===2?hl:RP2N[pp]),b);
+        return res(`CALL 0x${h4(nw())}`,b);
+      case 6:return res(ALUD[y]+'0x'+h2(nb()),b);
+      default:return res(`RST 0x${h2(y*8)}`,b);
+    }
+  }
+}
+const api={Z80,disasm,h2,h4,PAR};
+if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.Z80LIB=api;
+})(typeof window!=='undefined'?window:globalThis);
+
+</script>
+<script>
+const ROMDATA={"prelim": "PgH+AsoAAP4BwgAAwxEBdv/NFwHDAADhfP4ByiEBwwAAff4UyioBwwAAMawE8cHR4QjZ8cHR4d3h/eEx1AT95d3l5dXF9QjZ5dXF9TrABP4CwgAAOsEE/gTCAAA6wgT+BsIAADrDBP4IwgAAOsQE/grCAAA6xQT+DMIAADrGBP4OwgAAOscE/hDCAAA6yAT+EsIAADrJBP4UwgAAOsoE/hbCAAA6ywT+GMIAADrMBP4awgAAOs0E/hzCAAA6zgT+HsIAADrPBP4gwgAAOtAE/iLCAAA60QT+JMIAADrSBP4mwgAAOtME/ijCAAAh1AR+/qXCAAAh1QR+/jzCAAAxAAYhCQLlycMAAD7/5g/+D8IAAD5a5g/+CsIAAA/+BcIAAA/+gsIAAA/+QcIAAA/+oMIAACE0EuXBeP4SwgAAef40wgAAIQEA5fHcTwLDZQThIdYA5fHUWwLDZQThIWkC5SEBAOXx2M1lBCF2AuUh1gDl8dDNZQQhAQDl8dqBAs1lBCHWAOXx0owCzWUEIQEA5fE4A81lBCHWAOXxMAPNZQQhBADl8eyrAsNlBOEh0wDl8eS3AsNlBOEhxQLlIQQA5fHozWUEIdIC5SHTAOXx4M1lBCEEAOXx6t0CzWUEIdMA5fHi6ALNZQQhQADl8czzAsNlBOEhlwDl8cT/AsNlBOEhDQPlIUAA5fHIzWUEIRoD5SGXAOXxwM1lBCFAAOXxyiUDzWUEIZcA5fHCMAPNZQQhQADl8SgDzWUEIZcA5fEgA81lBCGAAOXx/E8Dw2UE4SFXAOXx9FsDw2UE4SFpA+UhgADl8fjNZQQhdgPlIVcA5fHwzWUEIYAA5fH6gQPNZQQhVwDl8fKMA81lBCGTA+nNZQQhngPl3eHd6c1lBCGpA+X94f3pzWUEPqUGBA8Q/f5axGUEBhA8EP3+asRlBAYAIQAAIxD9fP4BxGUEff4AxGUE3SHUBN1+AP6lxGUE3X4B/jzEZQTdI91+//6lxGUE3SFWBN1+f/48xGUE3SFUBd1+gP6lxGUE/SHUBP1+AP6lxGUE/X4B/jzEZQT9I/1+//6lxGUE/SFWBP1+f/48xGUE/SFUBf1+gP6lxGUEEUoEDgnNBQDDAABQcmVsaW1pbmFyeSB0ZXN0cyBjb21wbGV0ZSTBJgV4Dw8PD+YPb37NnQR45g9vfs2dBHkPDw8P5g9vfs2dBHnmD29+zZ0EPg3NnQQ+Cs2dBMMAAPXF1eUOAl/NBQDh0cHxyQIEBggKDA4QEhQWGBocHiAiJCYoAAAAAAAAAAAAAAAAAAAAAAAAAAClPAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAxMjM0NTY3ODlhYmNkZWYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "zexdoc": "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", "zexall": "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"};
+</script>
+<script>
+(function(){
+'use strict';
+const {Z80,disasm,h2,h4}=Z80LIB;
+const cpu=new Z80();
+const E={};const $=id=>E[id]||(E[id]=document.getElementById(id));
+const hex=(v,n)=>v.toString(16).toUpperCase().padStart(n,'0');
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* ---------- utilitaires d'affichage ---------- */
+let flashOn=true,flipFlash=false;
+const tcache={};
+function tx(id,txt){
+  if(tcache[id]===txt)return;
+  const had=id in tcache;tcache[id]=txt;
+  const el=$(id);el.textContent=txt;
+  if(flashOn&&had){el.classList.remove('chgA','chgB');el.classList.add(flipFlash?'chgA':'chgB');flipFlash=!flipFlash;}
+}
+function leds(id,n,cls){
+  const el=typeof id==='string'?$(id):id;el.innerHTML='<i></i>'.repeat(n);
+  const cells=[...el.children].reverse();   // cells[0] = bit 0
+  let last=-1,lastW=-1;
+  return {set(v,w){const ww=w||n;if(v===last&&ww===lastW)return;last=v;lastW=ww;
+    for(let i=0;i<n;i++){const on=((v>>>i)&1)===1;const c=cells[i];c.classList.toggle('on',on);c.classList.toggle('na',i>=ww);}}};
+}
+function setCls(el,key,cls){if(el._k!==cls){el.className=cls;el._k=cls;}}
+
+/* ---------- squelette : registres ---------- */
+const PAIRS=[['AF','A','F',7,6],['BC','B','C',0,1],['DE','D','E',2,3],['HL','H','L',4,5]];
+$('regMain').innerHTML=PAIRS.map(([n,hi,lo])=>`
+  <div class="regcard">
+    <div class="flex items-baseline justify-between"><span class="lbl">${n}</span><span class="mono text-[12px] dim" id="d_${n}"></span></div>
+    <div class="hx big" id="v_${n}">0000</div>
+    <div class="byterow"><b>${hi}</b><span class="hx" id="v_${hi}">00</span><span class="leds sm" id="l_${hi}"></span></div>
+    <div class="byterow"><b>${lo}</b><span class="hx" id="v_${lo}">00</span><span class="leds sm pk" id="l_${lo}"></span></div>
+  </div>`).join('');
+const regLeds={};
+PAIRS.forEach(([n,hi,lo])=>{regLeds[hi]=leds('l_'+hi,8);regLeds[lo]=leds('l_'+lo,8);});
+const chip=(id,k,cls='')=>`<div class="chip ${cls}"><span class="k">${k}</span><span class="v hx" id="${id}">0000</span></div>`;
+$('regAlt').innerHTML=['AF','BC','DE','HL'].map(n=>chip('v_'+n+'2',n+"'")).join('');
+$('regSpec').innerHTML=[chip('v_PC','PC','pc'),chip('v_SP','SP'),chip('v_IX','IX'),chip('v_IY','IY'),chip('v_I','I'),chip('v_R','R'),chip('v_WZ','WZ'),chip('v_IM','IM · IFF')].join('');
+
+/* drapeaux */
+const FL=[['S','Signe',0x80,0],['Z','Zéro',0x40,0],['Y','bit 5',0x20,1],['H','Demi-ret.',0x10,0],['X','bit 3',0x08,1],['P','Parité Débord.',0x04,0],['N','Soustr.',0x02,0],['C','Retenue',0x01,0]];
+$('flags').innerHTML=FL.map(([l,n,m,u])=>`<div class="flag ${u?'und':''}" id="fl_${m}"><span class="l">${l}</span><span class="n">${n}</span></div>`).join('');
+const fmHtml=FL.map(([l,,m])=>`<span data-m="${m}">${l}</span>`).join('');
+$('fmBefore').innerHTML=fmHtml;$('fmAfter').innerHTML=fmHtml;
+
+/* ALU, bus */
+const aluAl=leds('aluAl',16),aluBl=leds('aluBl',16),aluRl=leds('aluRl',16);
+/* puce Z80 : broches comme sur le schéma (D0-D7 + contrôle à gauche, A0-A15 à droite) */
+const LPINS=['D0','D1','D2','D3','D4','D5','D6','D7','M1','MREQ','IORQ','RD','WR','RFSH','HALT','INT','NMI','WAIT'];
+const RPINS=[];for(let i=0;i<16;i++)RPINS.push('A'+i);
+const pinHtml=(n,side)=>`<div class="pin ${side} ${/^[DA]\d/.test(n)?'':'ctl'} ${n==='WR'?'wr':''} ${n==='HALT'?'hl':''}" id="pin_${n}">${side==='l'?`<span class="pn">${n}</span><i class="sq"></i>`:`<i class="sq"></i><span class="pn">${n}</span>`}</div>`;
+$('cpuPins').innerHTML=`<div class="pins">${LPINS.map(n=>pinHtml(n,'l')).join('')}</div>
+  <div class="chipbody"><div class="nm">Z80</div><div class="nm2">CPU</div><div class="zl">ZILOG</div></div>
+  <div class="pins">${RPINS.map(n=>pinHtml(n,'r')).join('')}</div>`;
+const pinEl={};LPINS.concat(RPINS).forEach(n=>pinEl[n]=$('pin_'+n));
+function setPin(n,on){const el=pinEl[n];if(el._o!==on){el._o=on;el.classList.toggle('on',on);}}
+function fit(){const sc=Math.min(innerWidth/2560,innerHeight/1440);const st=$('stage');
+  st.style.transform='scale('+sc+')';st.style.left=((innerWidth-2560*sc)/2)+'px';st.style.top=((innerHeight-1440*sc)/2)+'px';}
+addEventListener('resize',fit);fit();
+let disRows=40,traceRows=16,stkRows=14;
+function sizeLists(){
+  disRows=Math.max(8,Math.floor($('disList').clientHeight/26));
+  traceRows=Math.max(6,Math.min(31,Math.floor($('trcList').clientHeight/26)));
+  stkRows=Math.max(6,Math.floor($('stk').clientHeight/28));
+  lastKeys.main=null;
+}
+$('decBits').innerHTML='';
+
+/* mémoire */
+let memHtml='<span class="hd"></span>';
+for(let c=0;c<16;c++)memHtml+=`<span class="hd mc">${c.toString(16).toUpperCase()}</span>`;
+memHtml+='<span class="hd">ASCII</span>';
+for(let r=0;r<16;r++){memHtml+=`<span class="ad" id="ma${r}"></span>`;for(let c=0;c<16;c++)memHtml+=`<span class="mc" id="mc${r*16+c}">00</span>`;memHtml+=`<span class="asc" id="as${r}"></span>`;}
+$('mem').innerHTML=memHtml;
+const memCells=[],memAsc=[],memAd=[];
+for(let i=0;i<256;i++)memCells.push($('mc'+i));
+for(let r=0;r<16;r++){memAsc.push($('as'+r));memAd.push($('ma'+r));}
+const memTxt=new Array(256).fill(''),memCl=new Array(256).fill('');
+
+/* ---------- ROMs ---------- */
+const b64=s=>{const bin=atob(s);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;};
+const ROMS=[
+  {id:'prelim',name:'PRELIM.COM',total:0,info:'Tests préliminaires de Frank D. Cringle : sauts, LD, ALU de base et drapeaux. Doit afficher « Preliminary tests complete ».'},
+  {id:'zexdoc',name:'ZEXDOC.CIM',total:67,info:'ZEXDOC, exerciseur d\'instructions Z80 : exécute chaque instruction des milliers de fois et compare un CRC (drapeaux documentés).'},
+  {id:'zexall',name:'ZEXALL.CIM',total:67,info:'ZEXALL, même exerciseur avec les drapeaux non documentés (bits 3 et 5) inclus dans le CRC.'}
+];
+ROMS.forEach(r=>{r.bytes=b64(ROMDATA[r.id]);});
+let romIdx=0,customName=null;
+$('romBar').insertAdjacentHTML('beforeend',ROMS.map((r,i)=>`<button class="rom" type="button" data-i="${i}">${r.name}</button>`).join(''));
+$('romBar').addEventListener('click',e=>{const b=e.target.closest('.rom');if(b)loadROM(+b.dataset.i);});
+
+/* ---------- console CP/M ---------- */
+let term='',termDirty=false,line='',nOk=0,nErr=0,curTest='';
+cpu.onChar=c=>{
+  if(c===13)return;
+  if(c===10){
+    const l=line.trim();
+    if(/\bOK$/.test(l))nOk++;else if(/ERROR/.test(l))nErr++;
+    line='';curTest='';term+='\n';
+  }else if(c>=32&&c<127||c===9){const ch=String.fromCharCode(c);line+=ch;term+=ch;}
+  if(term.length>40000)term=term.slice(-30000);
+  termDirty=true;
+};
+function resetConsole(){term='';line='';nOk=0;nErr=0;termDirty=true;}
+
+/* ---------- chargement ---------- */
+let customBytes=null,customRaw=false;
+let running=false,bps=new Set(),bpVer=0,stopReason='';
+function selRom(i){document.querySelectorAll('.rom').forEach(b=>b.classList.toggle('sel',+b.dataset.i===i));}
+function loadROM(i){
+  romIdx=i;customName=null;selRom(i);
+  const r=ROMS[i];resetConsole();cpu.loadCPM(r.bytes,0x100);
+  $('romInfo').textContent=`${r.name} · ${r.bytes.length} octets · chargée en 0100h · ${r.info}`;
+  $('progLbl').textContent=r.total?'Tests':'Résultat';
+  after();
+}
+function loadFile(name,buf){
+  const u=new Uint8Array(buf);const ext=(name.split('.').pop()||'').toLowerCase();
+  resetConsole();customName=name;romIdx=-1;selRom(-1);customBytes=u;customRaw=(ext==='bin'||ext==='rom');
+  if(ext==='bin'||ext==='rom'){cpu.loadRaw(u,0);$('romInfo').textContent=`${name} · ${u.length} octets · chargée en 0000h (mode brut, sans BDOS, arrêt sur HALT)`;}
+  else{cpu.loadCPM(u,0x100);$('romInfo').textContent=`${name} · ${u.length} octets · chargée en 0100h (mode CP/M, BDOS émulé)`;}
+  $('progLbl').textContent='Résultat';
+  after();
+}
+function after(){
+  stop();stopReason='';ipsHist.length=0;
+  tcache&&Object.keys(tcache).forEach(k=>delete tcache[k]);
+  memFollowPc=true;render(false);
+}
+$('file').addEventListener('change',async e=>{const f=e.target.files[0];if(f){loadFile(f.name,await f.arrayBuffer());}e.target.value='';});
+document.addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('drop');});
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('drop');});
+document.addEventListener('drop',async e=>{e.preventDefault();document.body.classList.remove('drop');const f=e.dataTransfer.files[0];if(f)loadFile(f.name,await f.arrayBuffer());});
+
+/* ---------- exécution ---------- */
+const SPEEDS=[1,4,15,60,300,3000,60000,0];
+const SLBL=['1/s','4/s','15/s','60/s','300/s','3 k/s','60 k/s','TURBO'];
+let speedIdx=3,acc=0,lastTs=0;
+function ended(){return cpu.done||cpu.halted;}
+function runN(n){
+  for(let i=0;i<n;i++){
+    cpu.step();
+    if(cpu.done||cpu.halted){stopReason=cpu.done?'done':'halt';running=false;return;}
+    if(bps.size&&bps.has(cpu.pc)){stopReason='bp';running=false;return;}
+  }
+}
+function start(){if(ended())return;running=true;stopReason='';lastTs=performance.now();acc=0;setRunBtn();requestAnimationFrame(frame);}
+function stop(){running=false;setRunBtn();}
+function setRunBtn(){const b=$('bRun');b.textContent=running?'⏸ Pause':'▶ Lancer';b.classList.toggle('active',running);}
+const ipsHist=[];
+let lastRender=0;
+function frame(ts){
+  if(!running){setRunBtn();render(true);return;}
+  const dt=Math.min(ts-lastTs,100);lastTs=ts;
+  const ips=SPEEDS[speedIdx];const t0=performance.now();
+  if(ips>0){acc+=dt/1000*ips;const n=Math.floor(acc);acc-=n;runN(n);}
+  else{while(running&&performance.now()-t0<42)runN(4000);}   // turbo : ~42 ms de calcul par image
+  ipsHist.push([ts,cpu.n,cpu.t]);while(ipsHist.length>40||(ipsHist.length>2&&ts-ipsHist[0][0]>900))ipsHist.shift();
+  flashOn=(ips>0&&ips<=300);
+  if(ips>0||ts-lastRender>180||!running){lastRender=ts;render(true);}
+  if(running)requestAnimationFrame(frame);else{setRunBtn();render(true);}
+}
+$('bRun').onclick=()=>{running?stop():start();render(false);};
+$('bStep').onclick=()=>{stop();flashOn=true;if(!ended()){runN(1);}render(true);};
+$('bStep100').onclick=()=>{stop();flashOn=false;if(!ended()){runN(100);}render(true);};
+$('bReset').onclick=()=>{
+  if(customName&&customBytes){resetConsole();customRaw?cpu.loadRaw(customBytes,0):cpu.loadCPM(customBytes,0x100);after();}
+  else loadROM(romIdx<0?0:romIdx);
+};
+$('speed').oninput=e=>{speedIdx=+e.target.value;$('speedLbl').textContent=SLBL[speedIdx];};
+$('speedLbl').textContent=SLBL[speedIdx];
+document.addEventListener('keydown',e=>{
+  if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
+  if(e.code==='Space'){e.preventDefault();$('bRun').click();}
+  else if(e.key==='n'||e.key==='N')$('bStep').click();
+  else if(e.key==='r'||e.key==='R')$('bReset').click();
+});
+
+/* points d'arrêt */
+function renderBps(){
+  $('bpList').innerHTML=[...bps].map(a=>`<button type="button" class="btn sm pk" data-a="${a}" title="Retirer">${hex(a,4)} ×</button>`).join('');
+  bpVer++;
+}
+function toggleBp(a){bps.has(a)?bps.delete(a):bps.add(a);renderBps();render(false);}
+$('bpAdd').onclick=()=>{const v=parseInt($('bpIn').value,16);if(!isNaN(v)&&v>=0&&v<65536){bps.add(v);renderBps();render(false);}};
+$('bpIn').addEventListener('keydown',e=>{if(e.key==='Enter')$('bpAdd').click();});
+$('bpList').addEventListener('click',e=>{const b=e.target.closest('button');if(b)toggleBp(+b.dataset.a);});
+$('disList').addEventListener('click',e=>{const r=e.target.closest('.dis');if(r)toggleBp(+r.dataset.a);});
+$('clr').onclick=()=>{term='';termDirty=true;render(false);};
+
+/* ---------- descriptions ---------- */
+const DESC={
+ NOP:'Ne fait rien pendant 4 cycles d\'horloge.',HALT:'Arrête le processeur jusqu\'à une interruption.',
+ LD:'Copie une valeur : registre, mémoire ou constante immédiate. Aucun drapeau modifié (sauf LD A,I et LD A,R).',
+ PUSH:'Empile un registre 16 bits : SP diminue de 2.',POP:'Dépile 16 bits dans un registre : SP augmente de 2.',
+ EX:'Échange le contenu de deux registres ou d\'un registre avec le sommet de pile.',EXX:'Échange BC, DE, HL avec leurs jumeaux BC\', DE\', HL\'.',
+ ADD:'Addition. Met à jour S, Z, H, P/V (débordement), N=0 et C.',ADC:'Addition avec retenue entrante C.',
+ SUB:'Soustraction de A. N=1, C = emprunt.',SBC:'Soustraction avec emprunt entrant.',
+ AND:'ET logique bit à bit. H=1, P/V = parité.',OR:'OU logique bit à bit. P/V = parité.',XOR:'OU exclusif. Sert aussi à mettre A à 0.',
+ CP:'Compare à A : soustraction dont seul l\'effet sur les drapeaux est conservé.',
+ INC:'Incrémente de 1. C n\'est pas modifié (8 bits) ; aucun drapeau en 16 bits.',DEC:'Décrémente de 1. C n\'est pas modifié (8 bits).',
+ JP:'Saut absolu vers une adresse 16 bits, éventuellement conditionnel.',JR:'Saut relatif signé (−126 à +129 octets), éventuellement conditionnel.',
+ DJNZ:'Décrémente B puis saute si B ≠ 0 : la boucle la plus courte du Z80.',CALL:'Appel de sous-programme : empile l\'adresse de retour puis saute.',
+ RET:'Retour : dépile PC. Peut être conditionnel.',RETI:'Retour d\'interruption.',RETN:'Retour d\'interruption non masquable.',RST:'Appel court vers une des huit adresses fixes 00h–38h.',
+ DI:'Interdit les interruptions masquables.',EI:'Autorise les interruptions masquables.',IM:'Choisit le mode d\'interruption 0, 1 ou 2.',
+ IN:'Lit un port d\'entrée/sortie.',OUT:'Écrit sur un port d\'entrée/sortie.',
+ RLCA:'Rotation de A à gauche, le bit 7 revient en bit 0 et dans C.',RRCA:'Rotation de A à droite, le bit 0 revient en bit 7 et dans C.',
+ RLA:'Rotation de A à gauche à travers la retenue.',RRA:'Rotation de A à droite à travers la retenue.',
+ RLC:'Rotation à gauche.',RRC:'Rotation à droite.',RL:'Rotation à gauche à travers C.',RR:'Rotation à droite à travers C.',
+ SLA:'Décalage arithmétique à gauche (×2).',SRA:'Décalage arithmétique à droite (÷2, signe conservé).',SLL:'Décalage à gauche, bit 0 forcé à 1 (non documenté).',SRL:'Décalage logique à droite (÷2).',
+ BIT:'Teste un bit : Z=1 si le bit est à 0. H=1.',RES:'Met un bit à 0.',SET:'Met un bit à 1.',
+ DAA:'Ajustement décimal de A après une addition ou soustraction BCD.',CPL:'Complément à un de A (inverse tous les bits).',NEG:'Complément à deux de A (A ← 0 − A).',
+ SCF:'Force la retenue à 1.',CCF:'Inverse la retenue.',RRD:'Rotation de 4 bits à droite entre A et (HL).',RLD:'Rotation de 4 bits à gauche entre A et (HL).',
+ LDI:'Copie (HL)→(DE), incrémente HL et DE, décrémente BC.',LDIR:'LDI répété jusqu\'à BC = 0.',LDD:'Copie (HL)→(DE), décrémente HL, DE et BC.',LDDR:'LDD répété jusqu\'à BC = 0.',
+ CPI:'Compare A à (HL), incrémente HL, décrémente BC.',CPIR:'CPI répété jusqu\'à égalité ou BC = 0.',CPD:'Compare A à (HL), décrémente HL et BC.',CPDR:'CPD répété jusqu\'à égalité ou BC = 0.',
+ INI:'Lit un port vers (HL), B−1, HL+1.',INIR:'INI répété jusqu\'à B = 0.',IND:'Lit un port vers (HL), B−1, HL−1.',INDR:'IND répété jusqu\'à B = 0.',
+ OUTI:'Écrit (HL) sur un port, B−1, HL+1.',OTIR:'OUTI répété jusqu\'à B = 0.',OUTD:'Écrit (HL) sur un port, B−1, HL−1.',OTDR:'OUTD répété jusqu\'à B = 0.'
+};
+const ALUSYM={ADD:'+',ADC:'+',SUB:'−',SBC:'−',CP:'−',AND:'&',OR:'|',XOR:'^',ADD16:'+',ADC16:'+',SBC16:'−',NEG:'−',INC:'+',DEC:'−',LDI:'→',LDD:'→',CPI:'−',CPD:'−'};
+const UNARY=new Set(['RLC','RRC','RL','RR','SLA','SRA','SLL','SRL','RLCA','RRCA','RLA','RRA','CPL','SCF','CCF']);
+
+/* ---------- rendu ---------- */
+const rb=a=>cpu.mem[a&0xFFFF];
+let memFollowPc=true,memBase=0x100,lastKeys={};
+function memTarget(){
+  const m=$('memFollow').value;
+  switch(m){case 'pc':return cpu.pc;case 'sp':return cpu.sp;case 'hl':return cpu.HL;case 'de':return cpu.DE;case 'bc':return cpu.BC;
+    case 'wr':return cpu.wlog[(cpu.wp-1)&15]>=0?cpu.wlog[(cpu.wp-1)&15]:cpu.pc;default:return null;}
+}
+$('memFollow').onchange=()=>{render(false);};
+$('memAddr').addEventListener('change',()=>{const v=parseInt($('memAddr').value,16);if(!isNaN(v)){$('memFollow').value='man';memBase=v&0xFF00;render(false);}});
+$('memPrev').onclick=()=>{$('memFollow').value='man';memBase=(memBase-256)&0xFFFF;render(false);};
+$('memNext').onclick=()=>{$('memFollow').value='man';memBase=(memBase+256)&0xFFFF;render(false);};
+
+function render(){
+  const r=cpu.r;
+  /* stats */
+  tx0('sInstr',cpu.n.toLocaleString('fr-FR'));tx0('sT',cpu.t.toLocaleString('fr-FR'));
+  let ips=0,mhz=0;
+  if(ipsHist.length>1&&running){const a=ipsHist[0],b=ipsHist[ipsHist.length-1];const dt=(b[0]-a[0])/1000;if(dt>0){ips=(b[1]-a[1])/dt;mhz=(b[2]-a[2])/dt/1e6;}}
+  tx0('sIps',ips>=1000?(ips/1000).toFixed(ips>=1e5?0:1)+'k':String(Math.round(ips)));tx0('sMhz',mhz.toFixed(2));
+  /* statut */
+  let st='Prêt',cl='b-idle';
+  if(running){st='En marche';cl='b-run';}
+  else if(cpu.done){st='Terminé · retour CP/M';cl='b-done';}
+  else if(cpu.halted){st='HALT';cl='b-halt';}
+  else if(stopReason==='bp'){st='Point d\'arrêt';cl='b-bp';}
+  else if(cpu.n>0){st='Pause';cl='b-idle';}
+  const sb=$('status');if(sb._k!==st){sb.textContent=st;sb.className='badge '+cl;sb._k=st;}
+  /* registres */
+  PAIRS.forEach(([n,hi,lo,ih,il])=>{
+    tx('v_'+n,hex(r[ih]<<8|r[il],4));tx('d_'+n,String(r[ih]<<8|r[il]));
+    tx('v_'+hi,hex(r[ih],2));tx('v_'+lo,hex(r[il],2));regLeds[hi].set(r[ih]);regLeds[lo].set(r[il]);
+  });
+  tx('v_AF2',hex(cpu.AF2,4));tx('v_BC2',hex(cpu.BC2,4));tx('v_DE2',hex(cpu.DE2,4));tx('v_HL2',hex(cpu.HL2,4));
+  tx('v_PC',hex(cpu.pc,4));tx('v_SP',hex(cpu.sp,4));tx('v_IX',hex(cpu.ix,4));tx('v_IY',hex(cpu.iy,4));
+  tx('v_I',hex(cpu.i,2));tx('v_R',hex(cpu.R,2));tx('v_WZ',hex(cpu.wz,4));tx('v_IM',cpu.im+' · '+cpu.iff1+cpu.iff2);
+  /* drapeaux */
+  const f=r[6];
+  FL.forEach(([,,m,u])=>{const el=$('fl_'+m);setCls(el,'f','flag'+(u?' und':'')+((f&m)?' on':''));});
+  tx0('fBin',f.toString(2).padStart(8,'0'));
+  /* ALU */
+  const w=cpu.aW,op=cpu.aOp;
+  tx0('aluOp',op+(w===16?' · 16 bits':''));
+  const mask=w===16?0xFFFF:0xFF;
+  tx0('aluA',hex(cpu.aA&mask,w/4));
+  const unary=UNARY.has(op);
+  tx0('aluB',unary?'—':hex(cpu.aB&mask,w/4));
+  tx0('aluSym',unary?'':(ALUSYM[op]||''));
+  tx0('aluC',String(cpu.aC));
+  tx0('aluR',hex(cpu.aR&mask,w/4));
+  tx0('aluNote',op==='BIT'?'masque du bit testé':op==='DAA'?'correction = '+hex(cpu.aB,2):unary?'opérande unique':'');
+  aluAl.set(cpu.aA&mask,w);aluBl.set(unary?0:cpu.aB&mask,w);aluRl.set(cpu.aR&mask,w);
+  const fa=cpu.aF;
+  $('fmBefore').querySelectorAll('span').forEach(s=>{const m=+s.dataset.m;setCls(s,'b',((fa&m)?'on':''));});
+  $('fmAfter').querySelectorAll('span').forEach(s=>{const m=+s.dataset.m;setCls(s,'a',((f&m)?'on':'')+(((f^fa)&m)?' chg':''));});
+  /* bus */
+  tx0('busAh',hex(cpu.bAddr,4));tx0('busDh',hex(cpu.bData,2));
+  const k=cpu.bKind,ba=cpu.bAddr,bd=cpu.bData;
+  for(let i=0;i<16;i++)setPin('A'+i,((ba>>i)&1)===1);
+  for(let i=0;i<8;i++)setPin('D'+i,((bd>>i)&1)===1);
+  setPin('M1',k===0);setPin('MREQ',k<=2);setPin('IORQ',k>=3);setPin('RD',k===0||k===1||k===3);
+  setPin('WR',k===2||k===4);setPin('RFSH',k===0);setPin('HALT',cpu.halted);
+  setPin('INT',false);setPin('NMI',false);setPin('WAIT',false);
+  tx0('busTxt',['Lecture instr.','Lecture mém.','Écriture mém.','Lecture E/S','Écriture E/S'][k]);
+
+  /* listes dépendantes de PC / écritures */
+  const key=cpu.pc+':'+cpu.wp+':'+bpVer+':'+cpu.hp;
+  if(lastKeys.main!==key){
+    lastKeys.main=key;
+    renderDis();renderTrace();renderDecoder();renderStack();
+  }
+  tx0('decT',cpu.tLast+' T');
+  renderMem();
+  if(termDirty){const t=$('term');t.textContent=term;const c=document.createElement('span');c.className='cur';t.appendChild(c);t.scrollTop=t.scrollHeight;termDirty=false;}
+  /* progression des tests */
+  const R=ROMS[romIdx];
+  if(R&&R.total){const pctv=Math.min(100,(nOk+nErr)/R.total*100);$('progBar').style.width=pctv+'%';}
+  else if(R){$('progBar').style.width=cpu.done?'100%':(cpu.n?'40%':'0%');}
+  else $('progBar').style.width=cpu.done?'100%':'0%';
+  tx0('nOk',String(nOk));tx0('nErr',String(nErr));
+}
+function tx0(id,t){if(tcache[id]===t)return;tcache[id]=t;$(id).textContent=t;}
+
+function renderDis(){
+  let a=cpu.pc,html='';
+  for(let i=0;i<disRows;i++){
+    const d=disasm(rb,a);const bytes=[];for(let k=0;k<d.len;k++)bytes.push(hex(rb(a+k),2));
+    html+=`<div class="row dis${i===0?' cur':''}${bps.has(a)?' hasbp':''}" data-a="${a}"><span class="bp"></span><span class="a">${hex(a,4)}</span><span class="b">${bytes.join(' ')}</span><span class="t">${esc(d.text)}</span></div>`;
+    a=(a+d.len)&0xFFFF;
+  }
+  $('disList').innerHTML=html;
+}
+function renderTrace(){
+  let html='';
+  for(let k=1;k<=traceRows;k++){
+    const pc=cpu.hist[(cpu.hp-k)&31];if(pc<0||k>cpu.n)break;
+    const d=disasm(rb,pc);
+    html+=`<div class="row trc"><span class="c" style="text-align:left">${k===1?'→':''}</span><span class="a">${hex(pc,4)}</span><span class="t">${esc(d.text)}</span><span class="c">${k}</span></div>`;
+  }
+  $('trcList').innerHTML=html||'<div class="row dim">Aucune instruction exécutée.</div>';
+}
+function renderDecoder(){
+  const pc=cpu.pc,d=disasm(rb,pc);
+  tx0('decAddr',hex(pc,4)+'h');
+  const bytes=[];for(let k=0;k<d.len;k++)bytes.push(rb(pc+k));
+  // repère l'octet d'opcode : préfixes d'abord, puis opcode, puis opérandes
+  const pre=d.pre;let opIdx;
+  if(/CB$/.test(pre))opIdx=bytes.length-1;
+  else if(pre==='ED')opIdx=bytes.indexOf(0xED)+1;
+  else{opIdx=0;while(opIdx<bytes.length-1&&(bytes[opIdx]===0xDD||bytes[opIdx]===0xFD))opIdx++;}
+  let html='';
+  bytes.forEach((b,i)=>{
+    const cls=(/^(DD|FD)CB$/.test(pre)&&i===bytes.length-2)?'bb-arg':(i<opIdx?'bb-pre':(i===opIdx?'bb-op':'bb-arg'));
+    html+=`<span class="bytebox ${cls}">${hex(b,2)}</span>`;
+  });
+  $('decBytes').innerHTML=html;
+  tx0('decMnem',d.text);
+  const root=d.text.split(' ')[0].replace('*','');
+  tx0('decDesc',DESC[root]||(root==='NOP*'?'Opcode ED non défini : se comporte comme NOP.':''));
+  const op=d.op,x=op>>6,y=(op>>3)&7,z=op&7;
+  const grp=(cap,val,n,cls)=>`<div class="bitf f-${cls}"><div class="cells">${val.toString(2).padStart(n,'0').split('').map(c=>`<span class="${c==='1'?'s1':''}">${c}</span>`).join('')}</div><div class="cap" style="color:inherit">${cap}=${val}</div></div>`;
+  $('decBits').innerHTML=grp('x',x,2,'x')+grp('y',y,3,'y')+grp('z',z,3,'z')+`<div class="mono text-[13px] dim pb-1">p=${y>>1} · q=${y&1}</div>`;
+  const tab=pre==='ED'?'ED':pre==='CB'?'CB':pre==='DD'?'DD (IX)':pre==='FD'?'FD (IY)':pre==='DDCB'?'DD CB (IX)':pre==='FDCB'?'FD CB (IY)':'Principale';
+  tx0('decTab',tab);tx0('decLen',d.len+' octet'+(d.len>1?'s':''));
+}
+function renderStack(){
+  let html='';
+  for(let i=0;i<stkRows;i++){
+    const a=(cpu.sp+i*2)&0xFFFF;const v=rb(a)|(rb(a+1)<<8);
+    html+=`<div class="row" style="grid-template-columns:16px 1fr auto;padding:2px 4px;border-left-color:${i===0?'var(--pk)':'transparent'};${i===0?'background:rgba(255,43,214,.1)':''}"><span class="dim">${i===0?'▸':''}</span><span class="dim">${hex(a,4)}</span><span class="hx">${hex(v,4)}</span></div>`;
+  }
+  $('stk').innerHTML=html;
+}
+function renderMem(){
+  const m=$('memFollow').value;
+  let base;
+  if(m==='man')base=memBase;else{const t=memTarget();base=(t&0xFF00);memBase=base;}
+  if(m!=='man'&&document.activeElement!==$('memAddr'))tx0('memAddr',hex(base,4));
+  const pc=cpu.pc,sp=cpu.sp,hl=cpu.HL;
+  const wr=new Set();for(let i=0;i<16;i++){const a=cpu.wlog[i];if(a>=0)wr.add(a);}
+  for(let r=0;r<16;r++){
+    const ad=(base+r*16)&0xFFFF;const at=hex(ad,4);if(memAd[r]._t!==at){memAd[r].textContent=at;memAd[r]._t=at;}
+    let asc='';
+    for(let c=0;c<16;c++){
+      const a=(ad+c)&0xFFFF,v=cpu.mem[a],i=r*16+c;
+      const t=hex(v,2);if(memTxt[i]!==t){memTxt[i]=t;memCells[i].textContent=t;}
+      let cl='mc';
+      if(a===pc)cl+=' pc';else if(a===sp)cl+=' sp';else if(a===hl)cl+=' hl';
+      if(wr.has(a)&&a!==pc)cl+=' wr';else if(!v)cl+=' z';
+      if(memCl[i]!==cl){memCl[i]=cl;memCells[i].className=cl;}
+      asc+=(v>=32&&v<127)?String.fromCharCode(v):'·';
+    }
+    if(memAsc[r]._t!==asc){memAsc[r].textContent=asc;memAsc[r]._t=asc;}
+  }
+}
+
+/* ---------- démarrage ---------- */
+loadROM(0);
+sizeLists();addEventListener('resize',()=>{sizeLists();render();});
+setTimeout(()=>start(),400);
+window.__z80=cpu; // pour inspection
+})();
+</script>
+
+</body></html>

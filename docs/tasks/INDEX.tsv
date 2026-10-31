@@ -1,0 +1,150 @@
+id	title	epic	deps	gate	kind	size	role
+E01-01	Squelette du crate puce-z80	E01		0	code	60	hermes
+E01-01a	Squelette du crate puce-z80-machines	E01	E01-01	0	code	50	hermes
+E01-02	Squelette du binaire puce-z80-cli	E01	E01-01a	0	code	70	hermes
+E01-03	Squelette du binaire puce-z80-web	E01	E01-02	0	code	50	hermes
+E01-04	Scripts de CI et d'hygiene	E01	E01-03	0	tooling	60	hermes
+E01-05	Type Pins (broches du Z80)	E01	E01-04	0	code	110	hermes
+E01-06	Type Regs (registres et drapeaux)	E01	E01-05	0	code	140	hermes
+E01-07	GATE E01 - squelette valide	E01	E01-06	1	gate	0	user
+E02-01	Types de plan (Tok, Kind, Addr, Reg, Plan)	E02	E01-07	0	code	120	hermes
+E02-02	Generer et integrer les tables de plans	E02	E02-01	0	tooling	40	hermes
+E02-03	Tests de coherence des tables	E02	E02-02	0	code	100	hermes
+E02-04	Selection de table et prefixes (decode.rs)	E02	E02-03	0	code	120	hermes
+E02-05	Tests de decode sur les 1280 combinaisons	E02	E02-04	0	code	70	hermes
+E03-01	Structures Cpu et Engine	E03	E02-05	0	code	110	hermes
+E03-02	Broches du cycle M1 (F4/F5/F6)	E03	E03-01	0	code	100	hermes
+E03-03	Broches des cycles memoire et internes	E03	E03-02	0	code	110	hermes
+E03-04	Broches des cycles d'entree/sortie	E03	E03-03	0	code	90	hermes
+E03-05	Resolution des adresses (Addr)	E03	E03-04	0	code	120	hermes
+E03-06	Lecture et ecriture des destinations (Reg)	E03	E03-05	0	code	90	hermes
+E03-07	Boucle de tick: execution d'un plan de jetons	E03	E03-06	0	code	150	hermes
+E03-08	Jetons conditionnels (?)	E03	E03-07	0	code	60	hermes
+E03-09	WAIT: insertion de T-states d'attente	E03	E03-08	0	code	90	hermes
+E03-10	Decodage a l'execution: M1, prefixes, DDCB	E03	E03-09	0	code	150	hermes
+E03-11	Trait Bus, enum Cycle et SimpleRam	E03	E03-10	0	code	110	hermes
+E03-12	Cpu::step: instruction complete via tick	E03	E03-11	0	code	120	hermes
+E03-13	Test de duree: toutes les instructions (semantique absente)	E03	E03-12	0	code	100	hermes
+E03-14	Journal de broches par T-state (outil de debug)	E03	E03-13	0	code	80	hermes
+E03-15	GATE E03 - moteur T-state valide	E03	E03-14	1	gate	0	user
+E04-01	Harnais CRC des primitives ALU	E04	E03-15	0	code	100	hermes
+E04-02	ALU 8 bits: ADD ADC SUB SBC CP	E04	E04-01	0	code	110	hermes
+E04-03	ALU 8 bits: AND XOR OR	E04	E04-02	0	code	60	hermes
+E04-04	INC8 et DEC8	E04	E04-03	0	code	60	hermes
+E04-05	Rotations et decalages (RLC..SRL)	E04	E04-04	0	code	80	hermes
+E04-06	Arithmetique 16 bits (ADD HL, ADC HL, SBC HL)	E04	E04-05	0	code	90	hermes
+E04-07	DAA	E04	E04-06	0	code	50	hermes
+E04-08	NEG, BIT et conditions	E04	E04-07	0	code	100	hermes
+E04-09	GATE E04 - ALU validee	E04	E04-08	1	gate	0	user
+E05-01	Harnais de vecteurs differentiels (diff.tsv)	E05	E04-09	0	code	150	hermes
+E05-02	Dispatch sem et helpers de registres	E05	E05-01	0	code	150	hermes
+E05-03	Misc: NOP DI EI HALT EX AF EXX EX DE,HL	E05	E05-02	0	code	70	hermes
+E05-04	LD 8 bits registre/registre/immediat/(HL)	E05	E05-03	0	code	70	hermes
+E05-05	LD indirects A,(BC) A,(DE) (nn) et WZ	E05	E05-04	0	code	90	hermes
+E05-06	LD 16 bits	E05	E05-05	0	code	70	hermes
+E05-07	INC/DEC 8 bits (registres et (HL))	E05	E05-06	0	code	60	hermes
+E05-08	INC/DEC 16 bits et ADD HL,rp	E05	E05-07	0	code	70	hermes
+E05-09	ALU 8 bits: registres, (HL), immediat	E05	E05-08	0	code	60	hermes
+E05-10	Accumulateur: RLCA RRCA RLA RRA DAA CPL SCF CCF	E05	E05-09	0	code	100	hermes
+E05-11	PUSH et POP	E05	E05-10	0	code	50	hermes
+E05-12	JP, JP cc, JP (HL)	E05	E05-11	0	code	60	hermes
+E05-13	JR, JR cc, DJNZ	E05	E05-12	0	code	70	hermes
+E05-14	CALL, CALL cc, RET, RET cc, RST	E05	E05-13	0	code	100	hermes
+E05-15	EX (SP),HL / IN A,(n) / OUT (n),A	E05	E05-14	0	code	70	hermes
+E05-16	Table main complete: tous les vecteurs	E05	E05-15	0	code	40	hermes
+E05-17	GATE E05 - table principale validee	E05	E05-16	1	gate	0	user
+E06-01	CB: rotations et decalages	E06	E05-17	0	code	80	hermes
+E06-02	CB: BIT	E06	E06-01	0	code	80	hermes
+E06-03	CB: RES et SET	E06	E06-02	0	code	50	hermes
+E06-04	Table CB complete	E06	E06-03	0	code	40	hermes
+E06-05	GATE E06 - table CB validee	E06	E06-04	1	gate	0	user
+E07-01	ED: IN r,(C) / OUT (C),r	E07	E06-05	0	code	90	hermes
+E07-02	ED: ADC HL,rp / SBC HL,rp	E07	E07-01	0	code	90	hermes
+E07-03	ED: LD (nn),rp / LD rp,(nn)	E07	E07-02	0	code	90	hermes
+E07-04	ED: NEG RETN/RETI IM LD I,A LD A,I RRD RLD NOP	E07	E07-03	0	code	140	hermes
+E07-05	ED: instructions de bloc LDI LDD CPI CPD (+ R)	E07	E07-04	0	code	150	hermes
+E07-06	ED: blocs d'E/S INI IND OUTI OUTD (+ R)	E07	E07-05	0	code	150	hermes
+E07-07	Table ED complete	E07	E07-06	0	code	40	hermes
+E07-08	GATE E07 - table ED validee	E07	E07-07	1	gate	0	user
+E08-01	DD/FD: dispatch et prefixe ignore	E08	E07-08	0	code	80	hermes
+E08-02	IX/IY: chargements 16 bits, pile, sauts	E08	E08-01	0	code	120	hermes
+E08-03	IX/IY: ADD IX,rp	E08	E08-02	0	code	60	hermes
+E08-04	IX/IY: LD r,(IX+d) / LD (IX+d),r / LD (IX+d),n	E08	E08-03	0	code	100	hermes
+E08-05	IX/IY: ALU, INC et DEC sur (IX+d)	E08	E08-04	0	code	60	hermes
+E08-06	IXH/IXL: registres non documentes	E08	E08-05	0	code	100	hermes
+E08-07	DDCB/FDCB: BIT RES SET et rotations sur (IX+d)	E08	E08-06	0	code	100	hermes
+E08-08	DDCB/FDCB non documentes: resultat copie dans un registre	E08	E08-07	0	code	60	hermes
+E08-09	Tables DD/FD et DDCB completes	E08	E08-08	0	code	40	hermes
+E08-10	Tous les vecteurs differentiels	E08	E08-09	0	code	30	hermes
+E08-11	GATE E08 - jeu d'instructions complet	E08	E08-10	1	gate	0	user
+E09-01	RESET (broche et methode)	E09	E08-11	0	code	90	hermes
+E09-02	HALT: cycles NOP et broche HALT	E09	E09-01	0	code	70	hermes
+E09-03	Cadre d'acceptation des interruptions	E09	E09-02	0	code	130	hermes
+E09-04	NMI	E09	E09-03	0	code	100	hermes
+E09-05	INT modes 1 et 2 (cycle d'acquittement)	E09	E09-04	0	code	140	hermes
+E09-06	INT mode 0 (instruction sur le bus)	E09	E09-05	0	code	90	hermes
+E09-07	BUSRQ / BUSAK	E09	E09-06	0	code	110	hermes
+E09-08	Integration Bus: irq(), nmi() et RETI visibles	E09	E09-07	0	code	100	hermes
+E09-09	GATE E09 - interruptions validees	E09	E09-08	1	gate	0	user
+E10-01	Audit MEMPTR (WZ) de toutes les familles	E10	E09-09	0	code	140	hermes
+E10-02	Drapeaux X/Y des blocs repetes et DDCB	E10	E10-01	0	code	100	hermes
+E10-03	SCF/CCF: facteur Q	E10	E10-02	0	code	70	hermes
+E10-04	NMOS: LD A,I / LD A,R et interruption	E10	E10-03	0	code	60	hermes
+E10-05	Conformite des comportements non documentes (spec 23)	E10	E10-04	0	code	140	hermes
+E10-06	GATE E10 - comportements non documentes	E10	E10-05	1	gate	0	user
+E11-01	Desassembleur: structure et formatage des operandes	E11	E10-06	0	code	120	hermes
+E11-02	Desassembleur: table principale et CB	E11	E11-01	0	code	120	hermes
+E11-03	Desassembleur: ED	E11	E11-02	0	code	90	hermes
+E11-04	Desassembleur: DD/FD et DDCB	E11	E11-03	0	code	110	hermes
+E11-05	Desassembleur: longueur coherente avec les plans	E11	E11-04	0	code	70	hermes
+E12-01	Feature inspect: journal de la derniere operation ALU	E12	E11-05	0	code	110	hermes
+E12-02	Feature inspect: historique PC, journal d'ecritures, compteurs	E12	E12-01	0	code	110	hermes
+E12-03	Feature inspect: dernier cycle de bus	E12	E12-02	0	code	60	hermes
+E12-04	GATE E12 - crate complet (CPU, desassembleur, inspection)	E12	E12-03	1	gate	0	user
+E13-01	Telechargement des ROMs de test (fetch_roms)	E13	E12-04	0	tooling	120	hermes
+E13-02	Machine CP/M (BDOS emule)	E13	E13-01	0	code	150	hermes
+E13-03	PRELIM: premiere ROM de test	E13	E13-02	0	code	70	hermes
+E13-04	ZEXDOC (67 tests)	E13	E13-03	0	code	100	hermes
+E13-05	ZEXALL (drapeaux X/Y inclus) et decision SCF/CCF	E13	E13-04	0	code	70	hermes
+E13-06	SingleStepTests/z80: decouvrir et documenter le format	E13	E13-05	0	doc	0	hermes
+E13-07	SingleStepTests: chargeur JSON et mise en etat	E13	E13-06	0	code	140	hermes
+E13-08	SingleStepTests: comparaison de l'etat final	E13	E13-07	0	code	140	hermes
+E13-09	SingleStepTests: etat final sur toutes les instructions	E13	E13-08	0	code	100	hermes
+E13-10	SingleStepTests: cycles de bus T par T (calage)	E13	E13-09	0	code	150	hermes
+E13-11	SingleStepTests: passe complete (etat + cycles)	E13	E13-10	0	code	60	hermes
+E13-12	FUSE: decouvrir et documenter le format	E13	E13-11	0	doc	0	hermes
+E13-13	FUSE: lecteur et execution	E13	E13-12	0	code	150	hermes
+E13-14	FUSE: suite complete	E13	E13-13	0	code	60	hermes
+E13-15	z80test (Patrik Rak): decouvrir et documenter	E13	E13-14	0	doc	0	hermes
+E13-16	Machine ZX Spectrum minimale	E13	E13-15	0	code	150	hermes
+E13-17	z80test: executer les 6 tests	E13	E13-16	0	code	120	hermes
+E13-18	ROMs de timing et d'interruptions: decouvrir et documenter	E13	E13-17	0	doc	0	hermes
+E13-19	ROMs de timing: execution	E13	E13-18	0	code	120	hermes
+E13-20	Performance: objectif 15 MHz equivalent en release	E13	E13-19	0	code	100	hermes
+E13-21	Baseline et resume global des suites	E13	E13-20	0	code	100	hermes
+E13-22	GATE E13 - toutes les ROMs de test validees	E13	E13-21	1	gate	0	user
+E14-01	Session: commandes et boucle de simulation	E14	E13-22	0	code	150	hermes
+E14-02	Session: instantane d'etat (Snapshot) conforme au protocole	E14	E14-01	0	code	150	hermes
+E14-03	Serveur HTTP: page et sante	E14	E14-02	0	code	100	hermes
+E14-04	Serveur WebSocket (/ws)	E14	E14-03	0	code	150	hermes
+E14-05	Commandes: roms, load, upload	E14	E14-04	0	code	120	hermes
+E14-06	Commandes: run, pause, step, reset, speed, breakpoints, view	E14	E14-05	0	code	110	hermes
+E14-07	Test bout en bout du serveur (client Rust)	E14	E14-06	0	code	140	hermes
+E14-08	Binaire z80-web: demarrage, arret propre	E14	E14-07	0	code	70	hermes
+E14-09	GATE E14 - serveur valide	E14	E14-08	1	gate	0	user
+E15-01	Page cliente: verification de conformite au protocole	E15	E14-09	0	code	90	hermes
+E15-02	E2E: la page recoit les instantanes du crate (Playwright optionnel)	E15	E15-01	0	tooling	90	hermes
+E15-03	E2E: ZEXDOC depuis la page	E15	E15-02	0	tooling	60	hermes
+E15-04	GATE E15 - frontend connecte, controle visuel	E15	E15-03	1	gate	0	user
+E16-01	Exemple: hote minimal a broches (tick)	E16	E15-04	0	code	90	hermes
+E16-02	Exemple: machine ZX-like avec contention	E16	E16-01	0	code	100	hermes
+E16-03	Exemple: bus partage (BUSRQ/BUSAK) et RESET	E16	E16-02	0	code	100	hermes
+E16-04	Exemple: IM2, vecteur et daisy chain (CTC factice)	E16	E16-03	0	code	120	hermes
+E16-05	Plusieurs CPU, determinisme et no_std	E16	E16-04	0	code	110	hermes
+E16-06	Documentation du crate (rustdoc + README)	E16	E16-05	0	doc	0	hermes
+E16-07	GATE E16 - reutilisation validee	E16	E16-06	1	gate	0	user
+E17-01	CI de release et changelog	E17	E16-07	0	tooling	60	hermes
+E17-02	GATE FINAL - v0.1.0	E17	E17-01	1	gate	0	user
+E17-03	DIFFEREE: variante CMOS	E17	E17-02	0	code	120	none
+E17-04	DIFFEREE: serialisation de l'etat (save states)	E17	E17-03	0	code	100	none
+E17-05	DIFFEREE: cible WASM du moteur (demo navigateur autonome)	E17	E17-04	0	code	100	none

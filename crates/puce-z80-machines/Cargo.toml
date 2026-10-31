@@ -1,0 +1,11 @@
+[package]
+name = "puce-z80-machines"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Test machines (CP/M, ZX Spectrum) and simulation session for Z80 emulator"
+
+[dependencies]
+puce-z80 = { path = "../puce-z80", features = ["inspect", "disasm", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

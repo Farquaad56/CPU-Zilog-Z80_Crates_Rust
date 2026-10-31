@@ -1,0 +1,10 @@
+/target
+**/*.rs.bk
+Cargo.lock.bak
+tests/roms/*
+!tests/roms/README.md
+docs/qa/inbox/*
+!docs/qa/inbox/.gitkeep
+.hermes/
+*.log
+z80_pack.tgz

@@ -1,0 +1,257 @@
+opcode	mnemonic	family	plan	t_min	t_max
+00	NOP	nop	F4	4	4
+01	LD BC,nn	ld_rp_nn	F4 R3:PC+>Z R3:PC+>W X0	10	10
+02	LD (BC),A	ld_bc_a	F4 X0 W3:BC<L	7	7
+03	INC BC	inc_rp	F6 X0	6	6
+04	INC B	inc_r	F4 X0	4	4
+05	DEC B	dec_r	F4 X0	4	4
+06	LD B,n	ld_r_n	F4 R3:PC+>L X0	7	7
+07	RLCA	acc_rlca	F4 X0	4	4
+08	EX AF,AF'	ex_af	F4 X0	4	4
+09	ADD HL,BC	add_hl_rp	F4 X0 I4 I3	11	11
+0A	LD A,(BC)	ld_a_bc	F4 R3:BC>L X0	7	7
+0B	DEC BC	dec_rp	F6 X0	6	6
+0C	INC C	inc_r	F4 X0	4	4
+0D	DEC C	dec_r	F4 X0	4	4
+0E	LD C,n	ld_r_n	F4 R3:PC+>L X0	7	7
+0F	RRCA	acc_rrca	F4 X0	4	4
+10	DJNZ e	djnz	F5 R3:PC+>L X0 ?I5 X1	8	13
+11	LD DE,nn	ld_rp_nn	F4 R3:PC+>Z R3:PC+>W X0	10	10
+12	LD (DE),A	ld_de_a	F4 X0 W3:DE<L	7	7
+13	INC DE	inc_rp	F6 X0	6	6
+14	INC D	inc_r	F4 X0	4	4
+15	DEC D	dec_r	F4 X0	4	4
+16	LD D,n	ld_r_n	F4 R3:PC+>L X0	7	7
+17	RLA	acc_rla	F4 X0	4	4
+18	JR e	jr	F4 R3:PC+>L X0 I5 X1	12	12
+19	ADD HL,DE	add_hl_rp	F4 X0 I4 I3	11	11
+1A	LD A,(DE)	ld_a_de	F4 R3:DE>L X0	7	7
+1B	DEC DE	dec_rp	F6 X0	6	6
+1C	INC E	inc_r	F4 X0	4	4
+1D	DEC E	dec_r	F4 X0	4	4
+1E	LD E,n	ld_r_n	F4 R3:PC+>L X0	7	7
+1F	RRA	acc_rra	F4 X0	4	4
+20	JR NZ,e	jr_cc	F4 R3:PC+>L X0 ?I5 X1	7	12
+21	LD HL,nn	ld_rp_nn	F4 R3:PC+>Z R3:PC+>W X0	10	10
+22	LD (nn),HL	ld_nn_hl	F4 R3:PC+>Z R3:PC+>W X0 W3:NN<L W3:NN+1<H	16	16
+23	INC HL	inc_rp	F6 X0	6	6
+24	INC H	inc_r	F4 X0	4	4
+25	DEC H	dec_r	F4 X0	4	4
+26	LD H,n	ld_r_n	F4 R3:PC+>L X0	7	7
+27	DAA	acc_daa	F4 X0	4	4
+28	JR Z,e	jr_cc	F4 R3:PC+>L X0 ?I5 X1	7	12
+29	ADD HL,HL	add_hl_rp	F4 X0 I4 I3	11	11
+2A	LD HL,(nn)	ld_hl_nn	F4 R3:PC+>Z R3:PC+>W R3:NN>L R3:NN+1>H X0	16	16
+2B	DEC HL	dec_rp	F6 X0	6	6
+2C	INC L	inc_r	F4 X0	4	4
+2D	DEC L	dec_r	F4 X0	4	4
+2E	LD L,n	ld_r_n	F4 R3:PC+>L X0	7	7
+2F	CPL	acc_cpl	F4 X0	4	4
+30	JR NC,e	jr_cc	F4 R3:PC+>L X0 ?I5 X1	7	12
+31	LD SP,nn	ld_rp_nn	F4 R3:PC+>Z R3:PC+>W X0	10	10
+32	LD (nn),A	ld_nn_a	F4 R3:PC+>Z R3:PC+>W X0 W3:NN<L	13	13
+33	INC SP	inc_rp	F6 X0	6	6
+34	INC (HL)	inc_hl	F4 R4:HL>L X0 W3:HL<L	11	11
+35	DEC (HL)	dec_hl	F4 R4:HL>L X0 W3:HL<L	11	11
+36	LD (HL),n	ld_hl_n	F4 R3:PC+>L W3:HL<L	10	10
+37	SCF	acc_scf	F4 X0	4	4
+38	JR C,e	jr_cc	F4 R3:PC+>L X0 ?I5 X1	7	12
+39	ADD HL,SP	add_hl_rp	F4 X0 I4 I3	11	11
+3A	LD A,(nn)	ld_a_nn	F4 R3:PC+>Z R3:PC+>W R3:NN>L X0	13	13
+3B	DEC SP	dec_rp	F6 X0	6	6
+3C	INC A	inc_r	F4 X0	4	4
+3D	DEC A	dec_r	F4 X0	4	4
+3E	LD A,n	ld_r_n	F4 R3:PC+>L X0	7	7
+3F	CCF	acc_ccf	F4 X0	4	4
+40	LD B,B	ld_r_r	F4 X0	4	4
+41	LD B,C	ld_r_r	F4 X0	4	4
+42	LD B,D	ld_r_r	F4 X0	4	4
+43	LD B,E	ld_r_r	F4 X0	4	4
+44	LD B,H	ld_r_r	F4 X0	4	4
+45	LD B,L	ld_r_r	F4 X0	4	4
+46	LD B,(HL)	ld_r_hl	F4 R3:HL>L X0	7	7
+47	LD B,A	ld_r_r	F4 X0	4	4
+48	LD C,B	ld_r_r	F4 X0	4	4
+49	LD C,C	ld_r_r	F4 X0	4	4
+4A	LD C,D	ld_r_r	F4 X0	4	4
+4B	LD C,E	ld_r_r	F4 X0	4	4
+4C	LD C,H	ld_r_r	F4 X0	4	4
+4D	LD C,L	ld_r_r	F4 X0	4	4
+4E	LD C,(HL)	ld_r_hl	F4 R3:HL>L X0	7	7
+4F	LD C,A	ld_r_r	F4 X0	4	4
+50	LD D,B	ld_r_r	F4 X0	4	4
+51	LD D,C	ld_r_r	F4 X0	4	4
+52	LD D,D	ld_r_r	F4 X0	4	4
+53	LD D,E	ld_r_r	F4 X0	4	4
+54	LD D,H	ld_r_r	F4 X0	4	4
+55	LD D,L	ld_r_r	F4 X0	4	4
+56	LD D,(HL)	ld_r_hl	F4 R3:HL>L X0	7	7
+57	LD D,A	ld_r_r	F4 X0	4	4
+58	LD E,B	ld_r_r	F4 X0	4	4
+59	LD E,C	ld_r_r	F4 X0	4	4
+5A	LD E,D	ld_r_r	F4 X0	4	4
+5B	LD E,E	ld_r_r	F4 X0	4	4
+5C	LD E,H	ld_r_r	F4 X0	4	4
+5D	LD E,L	ld_r_r	F4 X0	4	4
+5E	LD E,(HL)	ld_r_hl	F4 R3:HL>L X0	7	7
+5F	LD E,A	ld_r_r	F4 X0	4	4
+60	LD H,B	ld_r_r	F4 X0	4	4
+61	LD H,C	ld_r_r	F4 X0	4	4
+62	LD H,D	ld_r_r	F4 X0	4	4
+63	LD H,E	ld_r_r	F4 X0	4	4
+64	LD H,H	ld_r_r	F4 X0	4	4
+65	LD H,L	ld_r_r	F4 X0	4	4
+66	LD H,(HL)	ld_r_hl	F4 R3:HL>L X0	7	7
+67	LD H,A	ld_r_r	F4 X0	4	4
+68	LD L,B	ld_r_r	F4 X0	4	4
+69	LD L,C	ld_r_r	F4 X0	4	4
+6A	LD L,D	ld_r_r	F4 X0	4	4
+6B	LD L,E	ld_r_r	F4 X0	4	4
+6C	LD L,H	ld_r_r	F4 X0	4	4
+6D	LD L,L	ld_r_r	F4 X0	4	4
+6E	LD L,(HL)	ld_r_hl	F4 R3:HL>L X0	7	7
+6F	LD L,A	ld_r_r	F4 X0	4	4
+70	LD (HL),B	ld_hl_r	F4 X0 W3:HL<L	7	7
+71	LD (HL),C	ld_hl_r	F4 X0 W3:HL<L	7	7
+72	LD (HL),D	ld_hl_r	F4 X0 W3:HL<L	7	7
+73	LD (HL),E	ld_hl_r	F4 X0 W3:HL<L	7	7
+74	LD (HL),H	ld_hl_r	F4 X0 W3:HL<L	7	7
+75	LD (HL),L	ld_hl_r	F4 X0 W3:HL<L	7	7
+76	HALT	halt	F4 X0	4	4
+77	LD (HL),A	ld_hl_r	F4 X0 W3:HL<L	7	7
+78	LD A,B	ld_r_r	F4 X0	4	4
+79	LD A,C	ld_r_r	F4 X0	4	4
+7A	LD A,D	ld_r_r	F4 X0	4	4
+7B	LD A,E	ld_r_r	F4 X0	4	4
+7C	LD A,H	ld_r_r	F4 X0	4	4
+7D	LD A,L	ld_r_r	F4 X0	4	4
+7E	LD A,(HL)	ld_r_hl	F4 R3:HL>L X0	7	7
+7F	LD A,A	ld_r_r	F4 X0	4	4
+80	ADD A,B	alu_r	F4 X0	4	4
+81	ADD A,C	alu_r	F4 X0	4	4
+82	ADD A,D	alu_r	F4 X0	4	4
+83	ADD A,E	alu_r	F4 X0	4	4
+84	ADD A,H	alu_r	F4 X0	4	4
+85	ADD A,L	alu_r	F4 X0	4	4
+86	ADD A,(HL)	alu_hl	F4 R3:HL>L X0	7	7
+87	ADD A,A	alu_r	F4 X0	4	4
+88	ADC A,B	alu_r	F4 X0	4	4
+89	ADC A,C	alu_r	F4 X0	4	4
+8A	ADC A,D	alu_r	F4 X0	4	4
+8B	ADC A,E	alu_r	F4 X0	4	4
+8C	ADC A,H	alu_r	F4 X0	4	4
+8D	ADC A,L	alu_r	F4 X0	4	4
+8E	ADC A,(HL)	alu_hl	F4 R3:HL>L X0	7	7
+8F	ADC A,A	alu_r	F4 X0	4	4
+90	SUB B	alu_r	F4 X0	4	4
+91	SUB C	alu_r	F4 X0	4	4
+92	SUB D	alu_r	F4 X0	4	4
+93	SUB E	alu_r	F4 X0	4	4
+94	SUB H	alu_r	F4 X0	4	4
+95	SUB L	alu_r	F4 X0	4	4
+96	SUB (HL)	alu_hl	F4 R3:HL>L X0	7	7
+97	SUB A	alu_r	F4 X0	4	4
+98	SBC A,B	alu_r	F4 X0	4	4
+99	SBC A,C	alu_r	F4 X0	4	4
+9A	SBC A,D	alu_r	F4 X0	4	4
+9B	SBC A,E	alu_r	F4 X0	4	4
+9C	SBC A,H	alu_r	F4 X0	4	4
+9D	SBC A,L	alu_r	F4 X0	4	4
+9E	SBC A,(HL)	alu_hl	F4 R3:HL>L X0	7	7
+9F	SBC A,A	alu_r	F4 X0	4	4
+A0	AND B	alu_r	F4 X0	4	4
+A1	AND C	alu_r	F4 X0	4	4
+A2	AND D	alu_r	F4 X0	4	4
+A3	AND E	alu_r	F4 X0	4	4
+A4	AND H	alu_r	F4 X0	4	4
+A5	AND L	alu_r	F4 X0	4	4
+A6	AND (HL)	alu_hl	F4 R3:HL>L X0	7	7
+A7	AND A	alu_r	F4 X0	4	4
+A8	XOR B	alu_r	F4 X0	4	4
+A9	XOR C	alu_r	F4 X0	4	4
+AA	XOR D	alu_r	F4 X0	4	4
+AB	XOR E	alu_r	F4 X0	4	4
+AC	XOR H	alu_r	F4 X0	4	4
+AD	XOR L	alu_r	F4 X0	4	4
+AE	XOR (HL)	alu_hl	F4 R3:HL>L X0	7	7
+AF	XOR A	alu_r	F4 X0	4	4
+B0	OR B	alu_r	F4 X0	4	4
+B1	OR C	alu_r	F4 X0	4	4
+B2	OR D	alu_r	F4 X0	4	4
+B3	OR E	alu_r	F4 X0	4	4
+B4	OR H	alu_r	F4 X0	4	4
+B5	OR L	alu_r	F4 X0	4	4
+B6	OR (HL)	alu_hl	F4 R3:HL>L X0	7	7
+B7	OR A	alu_r	F4 X0	4	4
+B8	CP B	alu_r	F4 X0	4	4
+B9	CP C	alu_r	F4 X0	4	4
+BA	CP D	alu_r	F4 X0	4	4
+BB	CP E	alu_r	F4 X0	4	4
+BC	CP H	alu_r	F4 X0	4	4
+BD	CP L	alu_r	F4 X0	4	4
+BE	CP (HL)	alu_hl	F4 R3:HL>L X0	7	7
+BF	CP A	alu_r	F4 X0	4	4
+C0	RET NZ	ret_cc	F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	5	11
+C1	POP BC	pop	F4 R3:SP+>L R3:SP+>H X0	10	10
+C2	JP NZ,nn	jp_cc	F4 R3:PC+>Z R3:PC+>W X0	10	10
+C3	JP nn	jp	F4 R3:PC+>Z R3:PC+>W X0	10	10
+C4	CALL NZ,nn	call_cc	F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	10	17
+C5	PUSH BC	push	F5 X0 W3:-SP<H W3:-SP<L	11	11
+C6	ADD A,n	alu_n	F4 R3:PC+>L X0	7	7
+C7	RST 00H	rst	F5 X0 W3:-SP<H W3:-SP<L X1	11	11
+C8	RET Z	ret_cc	F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	5	11
+C9	RET	ret	F4 R3:SP+>Z R3:SP+>W X0	10	10
+CA	JP Z,nn	jp_cc	F4 R3:PC+>Z R3:PC+>W X0	10	10
+CB	prefix	prefix	F4	4	4
+CC	CALL Z,nn	call_cc	F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	10	17
+CD	CALL nn	call	F4 R3:PC+>Z R4:PC+>W X0 W3:-SP<H W3:-SP<L X1	17	17
+CE	ADC A,n	alu_n	F4 R3:PC+>L X0	7	7
+CF	RST 08H	rst	F5 X0 W3:-SP<H W3:-SP<L X1	11	11
+D0	RET NC	ret_cc	F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	5	11
+D1	POP DE	pop	F4 R3:SP+>L R3:SP+>H X0	10	10
+D2	JP NC,nn	jp_cc	F4 R3:PC+>Z R3:PC+>W X0	10	10
+D3	OUT (n),A	out_n_a	F4 R3:PC+>Z X0 O4:AN<L	11	11
+D4	CALL NC,nn	call_cc	F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	10	17
+D5	PUSH DE	push	F5 X0 W3:-SP<H W3:-SP<L	11	11
+D6	SUB n	alu_n	F4 R3:PC+>L X0	7	7
+D7	RST 10H	rst	F5 X0 W3:-SP<H W3:-SP<L X1	11	11
+D8	RET C	ret_cc	F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	5	11
+D9	EXX	exx	F4 X0	4	4
+DA	JP C,nn	jp_cc	F4 R3:PC+>Z R3:PC+>W X0	10	10
+DB	IN A,(n)	in_a_n	F4 R3:PC+>Z N4:AN>L X0	11	11
+DC	CALL C,nn	call_cc	F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	10	17
+DD	prefix	prefix	F4	4	4
+DE	SBC A,n	alu_n	F4 R3:PC+>L X0	7	7
+DF	RST 18H	rst	F5 X0 W3:-SP<H W3:-SP<L X1	11	11
+E0	RET PO	ret_cc	F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	5	11
+E1	POP HL	pop	F4 R3:SP+>L R3:SP+>H X0	10	10
+E2	JP PO,nn	jp_cc	F4 R3:PC+>Z R3:PC+>W X0	10	10
+E3	EX (SP),HL	ex_sp_hl	F4 R3:SP>Z R4:SP+1>W X0 W3:SP+1<H W5:SP<L X1	19	19
+E4	CALL PO,nn	call_cc	F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	10	17
+E5	PUSH HL	push	F5 X0 W3:-SP<H W3:-SP<L	11	11
+E6	AND n	alu_n	F4 R3:PC+>L X0	7	7
+E7	RST 20H	rst	F5 X0 W3:-SP<H W3:-SP<L X1	11	11
+E8	RET PE	ret_cc	F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	5	11
+E9	JP (HL)	jp_hl	F4 X0	4	4
+EA	JP PE,nn	jp_cc	F4 R3:PC+>Z R3:PC+>W X0	10	10
+EB	EX DE,HL	ex_de_hl	F4 X0	4	4
+EC	CALL PE,nn	call_cc	F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	10	17
+ED	prefix	prefix	F4	4	4
+EE	XOR n	alu_n	F4 R3:PC+>L X0	7	7
+EF	RST 28H	rst	F5 X0 W3:-SP<H W3:-SP<L X1	11	11
+F0	RET P	ret_cc	F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	5	11
+F1	POP AF	pop	F4 R3:SP+>L R3:SP+>H X0	10	10
+F2	JP P,nn	jp_cc	F4 R3:PC+>Z R3:PC+>W X0	10	10
+F3	DI	di	F4 X0	4	4
+F4	CALL P,nn	call_cc	F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	10	17
+F5	PUSH AF	push	F5 X0 W3:-SP<H W3:-SP<L	11	11
+F6	OR n	alu_n	F4 R3:PC+>L X0	7	7
+F7	RST 30H	rst	F5 X0 W3:-SP<H W3:-SP<L X1	11	11
+F8	RET M	ret_cc	F5 X0 ?R3:SP+>Z ?R3:SP+>W X1	5	11
+F9	LD SP,HL	ld_sp_hl	F6 X0	6	6
+FA	JP M,nn	jp_cc	F4 R3:PC+>Z R3:PC+>W X0	10	10
+FB	EI	ei	F4 X0	4	4
+FC	CALL M,nn	call_cc	F4 R3:PC+>Z R3:PC+>W X0 ?I1 ?W3:-SP<H ?W3:-SP<L X1	10	17
+FD	prefix	prefix	F4	4	4
+FE	CP n	alu_n	F4 R3:PC+>L X0	7	7
+FF	RST 38H	rst	F5 X0 W3:-SP<H W3:-SP<L X1	11	11

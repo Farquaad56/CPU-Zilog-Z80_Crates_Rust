@@ -1,0 +1,655 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>IMSAI 8080 Simulator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one scaled front-panel plate on top, three working cards underneath (terminal, CPU, programs). */
+:root{
+  --bg:#eceae4; --fg:#1d2127; --muted:#5d636c; --card:#f8f7f3; --line:#cfccc3; --accent:#b4381d; --accent-fg:#fff; --field:#fff; --hl:#f1d9a8;
+  --sans:'Barlow',system-ui,sans-serif; --cond:'Barlow Condensed','Arial Narrow',sans-serif; --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#15181c; --fg:#e6e3da; --muted:#9aa0a8; --card:#1e2227; --line:#343a42; --accent:#ee6a49; --accent-fg:#16110f; --field:#14171a; --hl:#4a3b1c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15181c; --fg:#e6e3da; --muted:#9aa0a8; --card:#1e2227; --line:#343a42; --accent:#ee6a49; --accent-fg:#16110f; --field:#14171a; --hl:#4a3b1c; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:auto}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.45;
+  padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1500px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:flex-end;justify-content:space-between}
+h1{font:600 34px/1 var(--cond);letter-spacing:.04em;text-transform:uppercase;margin:0;text-wrap:balance}
+header p{margin:4px 0 0;color:var(--muted);max-width:68ch}
+.hbtns{display:flex;gap:8px;align-items:center}
+button,select,input{font:inherit;color:inherit}
+.btn{background:var(--field);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- front panel (a physical object: same look in both themes) ---------- */
+#stage{position:relative;width:100%;overflow:hidden;border-radius:10px}
+#panel{position:absolute;left:0;top:0;width:1400px;height:440px;transform-origin:0 0}
+.plate{position:absolute;inset:0;border-radius:14px;padding:22px 34px;color:#e9e3cf;
+  background:linear-gradient(180deg,#2a313b 0%,#222831 55%,#1c2128 100%);
+  box-shadow:inset 0 0 0 2px #3b4350,inset 0 0 0 8px #1a1f26,inset 0 0 0 9px #323a46,0 14px 30px rgba(0,0,0,.35);
+  font-family:var(--cond);font-weight:600;letter-spacing:.06em;user-select:none}
+.plate.off .led i{opacity:0!important}
+.brand{display:flex;align-items:baseline;gap:14px;height:46px}
+.logo{font:700 40px/1 var(--cond);letter-spacing:.14em;color:#f2ecd8}
+.model{font:700 40px/1 var(--cond);letter-spacing:.08em;color:#e9552f}
+.bars{display:flex;gap:3px;align-self:center;margin-left:6px}.bars b{display:block;width:7px;height:22px;transform:skewX(-14deg)}
+.bars b:nth-child(1){background:#e9552f}.bars b:nth-child(2){background:#d79a2b}.bars b:nth-child(3){background:#8d9aa8}
+.mfg{margin-left:auto;font-size:14px;letter-spacing:.3em;color:#9aa4b0}
+.band{display:flex;gap:90px;align-items:flex-start;margin-top:10px}
+.grp h6{margin:0 0 7px;font:600 13px/1 var(--cond);letter-spacing:.28em;color:#b9b29c;display:flex;align-items:center;gap:8px}
+.grp h6::after{content:"";flex:1;height:1px;background:#4a5362}
+.row{display:flex;gap:0 7px}
+.oct{display:flex;gap:7px;padding-right:12px;margin-right:2px;border-right:1px solid #3a4351}
+.oct:last-child{border-right:0;margin-right:0;padding-right:0}
+.cell{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:22px}
+.cell span{font:500 11px/1 var(--mono);color:#8c95a1;letter-spacing:0}
+.cell .nm{font:600 12px/1 var(--cond);letter-spacing:.1em;color:#d9d2bc;text-align:center;white-space:nowrap}
+.led{position:relative;width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#5a1d17,#2a0d0a 70%);box-shadow:inset 0 1px 2px rgba(0,0,0,.7),0 0 0 2px #14181d,0 1px 0 2px #3a4350}
+.led i{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 40% 35%,#ffd2c4,#ff4630 50%,#c3170c);opacity:var(--b,0);box-shadow:0 0 14px 4px rgba(255,64,40,.75)}
+.led.amber i{background:radial-gradient(circle at 40% 35%,#fff0c4,#ffb324 50%,#c97a00);box-shadow:0 0 14px 4px rgba(255,170,30,.7)}
+.led.amber{background:radial-gradient(circle at 40% 35%,#4f3510,#261a07 70%)}
+.statusrow{display:flex;gap:7px}
+.statusrow .cell{min-width:34px}
+.sep{width:1px;background:#3a4351;align-self:stretch;margin:0 4px}
+.swarea{display:flex;gap:70px;margin-top:20px;align-items:flex-start}
+.tog{position:relative;width:30px;height:84px;background:none;border:0;padding:0;cursor:pointer;display:block;flex:none}
+.tog .slot{position:absolute;left:9px;right:9px;top:2px;bottom:2px;background:#0b0d10;border-radius:6px;box-shadow:inset 0 1px 3px #000,0 1px 0 #3b4452}
+.tog .lever{position:absolute;left:5px;right:5px;height:46px;border-radius:9px;background:linear-gradient(90deg,#8d97a3,#f0f2f4 45%,#aab2bc);box-shadow:0 2px 4px rgba(0,0,0,.6);transition:top .08s}
+.tog .lever::after{content:"";position:absolute;left:3px;right:3px;top:3px;height:12px;border-radius:6px;background:rgba(255,255,255,.55)}
+.tog.on .lever{top:4px}.tog:not(.on) .lever{top:34px}
+.tog:hover .lever{filter:brightness(1.08)}
+.tog.ctl .lever{background:linear-gradient(90deg,#b64a2a,#ff9a72 45%,#cc5a34)}
+.tog.ctl.mom .lever{top:19px}
+.tog.mom.up .lever{top:5px}.tog.mom.dn .lever{top:33px}
+.tog.mom{height:84px}
+.tog.mom .hit{position:absolute;left:0;right:0;height:50%;background:none;border:0;padding:0;cursor:pointer}
+.tog.mom .hit.u{top:0}.tog.mom .hit.d{bottom:0}
+.ctlcell{display:flex;flex-direction:column;align-items:center;gap:6px;width:76px}
+.ctlcell .up,.ctlcell .dn{font:600 12px/1.1 var(--cond);letter-spacing:.1em;color:#e2dbc4;text-align:center;min-height:27px;display:flex;align-items:flex-end;justify-content:center}
+.ctlcell .dn{align-items:flex-start}
+.swlabel{font:500 11px/1 var(--mono);color:#8c95a1;margin-top:5px;text-align:center}
+.swcell{display:flex;flex-direction:column;align-items:center}
+.swcap{font:600 11px/1 var(--cond);letter-spacing:.25em;color:#9aa4b0;margin-top:8px}
+.hint{position:absolute;left:34px;bottom:12px;font:500 12px/1 var(--cond);letter-spacing:.2em;color:#7d8794}
+.hint2{position:absolute;right:34px;bottom:12px;font:500 12px/1 var(--cond);letter-spacing:.2em;color:#7d8794}
+
+/* ---------- cards ---------- */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.card h2{margin:0;font:600 17px/1 var(--cond);letter-spacing:.14em;text-transform:uppercase}
+.card h2 small{font:400 12px var(--sans);letter-spacing:0;text-transform:none;color:var(--muted);margin-left:8px}
+#term{background:#0c1110;color:#8ff0a8;font:400 14px/1.35 var(--mono);height:300px;overflow-y:auto;padding:10px;border-radius:6px;white-space:pre-wrap;word-break:break-all;border:1px solid #1d2a26;cursor:text}
+#term:focus{outline:2px solid var(--accent)}
+#term .cur{display:inline-block;width:.6em;background:#8ff0a8;animation:bl 1s steps(2) infinite}
+@keyframes bl{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){#term .cur{animation:none}.tog .lever{transition:none}}
+.regs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 10px;font:400 14px var(--mono)}
+.regs div{background:var(--field);border:1px solid var(--line);border-radius:5px;padding:3px 8px;display:flex;justify-content:space-between;gap:6px}
+.regs b{font-weight:500;color:var(--muted)}
+.flags{display:flex;gap:6px;font:500 13px var(--mono)}
+.flags span{padding:2px 8px;border-radius:4px;border:1px solid var(--line);color:var(--muted)}
+.flags span.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.mono{font:400 13px/1.5 var(--mono);background:var(--field);border:1px solid var(--line);border-radius:6px;padding:6px 8px;white-space:pre;overflow-x:auto;margin:0}
+.mono .cur{background:var(--hl);display:inline-block;width:100%}
+.mono b{background:var(--accent);color:var(--accent-fg);font-weight:500}
+.stats{display:flex;flex-wrap:wrap;gap:4px 18px;color:var(--muted);font:400 13px var(--mono)}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0}
+select,input[type=text]{background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0;width:100%}
+.frow{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.frow>*{flex:1 1 140px}
+.desc{margin:0;color:var(--muted)}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px}
+.note{font-size:13px;color:var(--muted);margin:0}
+details summary{cursor:pointer;font-weight:600}
+details ol{margin:8px 0 0;padding-left:20px;color:var(--muted)}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>IMSAI 8080 Simulator</h1>
+      <p id="sub"></p>
+    </div>
+    <div class="hbtns"><button class="btn" id="lang" aria-label="Language">FR / EN</button></div>
+  </header>
+
+  <div id="stage"><div id="panel"></div></div>
+
+  <div class="cards">
+    <section class="card">
+      <h2><span data-t="term"></span><small data-t="termHint"></small></h2>
+      <div id="term" tabindex="0" role="textbox" aria-label="Serial terminal" aria-multiline="true"></div>
+      <div class="frow"><button class="btn" id="clr" data-t="clear"></button></div>
+    </section>
+
+    <section class="card">
+      <h2><span data-t="cpu"></span><small id="state"></small></h2>
+      <div class="regs" id="regs"></div>
+      <div class="flags" id="flags"></div>
+      <h2 style="margin-top:4px"><span data-t="dis"></span></h2>
+      <pre class="mono" id="dis"></pre>
+      <h2><span data-t="mem"></span></h2>
+      <pre class="mono" id="mem"></pre>
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <section class="card">
+      <h2 data-t="prog"></h2>
+      <label class="f"><span data-t="choose"></span><select id="psel"></select></label>
+      <p class="desc" id="pdesc"></p>
+      <div class="frow">
+        <label class="chk"><input type="checkbox" id="auto" checked><span data-t="autorun"></span></label>
+        <button class="btn primary" id="pload" data-t="load"></button>
+      </div>
+      <div class="frow">
+        <label class="f"><span data-t="speed"></span>
+          <select id="spd"></select></label>
+        <label class="f"><span data-t="setsw"></span>
+          <input type="text" id="swhex" value="0000" maxlength="4" inputmode="text" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <div class="frow">
+        <label class="f"><span data-t="file"></span>
+          <input type="file" id="file" accept=".bin,.hex,.com"></label>
+        <label class="f"><span data-t="addr"></span>
+          <input type="text" id="faddr" value="0000" maxlength="4" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <details>
+        <summary data-t="guide"></summary>
+        <ol id="guide"></ol>
+      </details>
+      <p class="note" data-t="note"></p>
+    </section>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ================= Intel 8080 core ================= */
+const P8=new Uint8Array(256);
+for(let i=0;i<256;i++){let v=i,p=1;while(v){p^=v&1;v>>=1}P8[i]=p?4:0}
+const szp=x=>(x&0x80)|(x?0:0x40)|P8[x];
+class CPU8080{
+  constructor(){
+    this.m=new Uint8Array(65536);this.r=new Uint8Array(8);
+    this.sp=0;this.pc=0;this.f=2;this.halted=false;this.iff=0;this.prot=false;
+    this.t=0;this.n=0;this.stk=false;this.stride=1;this.sk=0;
+    this.aA=new Float64Array(16);this.aD=new Float64Array(8);this.st=new Float64Array(6);this.aN=0;
+    this.lastA=0;this.lastD=0;this.in=()=>0;this.out=()=>{};
+  }
+  clearDuty(){this.aA.fill(0);this.aD.fill(0);this.st.fill(0);this.aN=0}
+  bus(a,d,k){
+    this.lastA=a;this.lastD=d;
+    if(++this.sk<this.stride)return;this.sk=0;this.aN++;
+    for(let i=0;i<16;i++)if((a>>i)&1)this.aA[i]++;
+    for(let i=0;i<8;i++)if((d>>i)&1)this.aD[i]++;
+    if(k===0){this.st[0]++;this.st[1]++}else if(k===1)this.st[1]++;else if(k===2)this.st[4]++;else if(k===3)this.st[2]++;else this.st[3]++;
+    if(this.stk)this.st[5]++;
+  }
+  get hl(){return(this.r[4]<<8)|this.r[5]}
+  set hl(v){this.r[4]=v>>8;this.r[5]=v&255}
+  rd(a){a&=65535;const v=this.m[a];this.bus(a,v,1);return v}
+  wr(a,v){a&=65535;if(!(this.prot&&a<0x100))this.m[a]=v;this.bus(a,v,2)}
+  fetch(){const a=this.pc,v=this.m[a];this.pc=(a+1)&65535;this.bus(a,v,0);return v}
+  i8(){const a=this.pc,v=this.m[a];this.pc=(a+1)&65535;this.bus(a,v,1);return v}
+  i16(){const l=this.i8();return l|(this.i8()<<8)}
+  pushw(v){this.stk=true;this.sp=(this.sp-1)&65535;this.wr(this.sp,v>>8);this.sp=(this.sp-1)&65535;this.wr(this.sp,v&255);this.stk=false}
+  popw(){this.stk=true;const l=this.rd(this.sp);this.sp=(this.sp+1)&65535;const h=this.rd(this.sp);this.sp=(this.sp+1)&65535;this.stk=false;return l|(h<<8)}
+  gr(i){return i===6?this.rd(this.hl):this.r[i]}
+  sr(i,v){if(i===6)this.wr(this.hl,v);else this.r[i]=v}
+  rp(i){const r=this.r;return i===0?(r[0]<<8)|r[1]:i===1?(r[2]<<8)|r[3]:i===2?this.hl:this.sp}
+  setrp(i,v){v&=65535;const r=this.r;if(i===0){r[0]=v>>8;r[1]=v&255}else if(i===1){r[2]=v>>8;r[3]=v&255}else if(i===2)this.hl=v;else this.sp=v}
+  cond(y){const f=this.f;switch(y){case 0:return!(f&0x40);case 1:return!!(f&0x40);case 2:return!(f&1);case 3:return!!(f&1);case 4:return!(f&4);case 5:return!!(f&4);case 6:return!(f&0x80);default:return!!(f&0x80)}}
+  alu(y,v){
+    const a=this.r[7],c=this.f&1;let res;
+    switch(y){
+      case 0:case 1:{res=a+v+(y===1?c:0);this.f=szp(res&255)|(res>255?1:0)|((a^v^res)&0x10)|2;this.r[7]=res&255;break}
+      case 2:case 3:case 7:{const nv=(~v)&255;res=a+nv+((y===3&&c)?0:1);this.f=szp(res&255)|(res>255?0:1)|((a^nv^res)&0x10)|2;if(y!==7)this.r[7]=res&255;break}
+      case 4:{res=a&v;this.f=szp(res)|(((a|v)&8)?0x10:0)|2;this.r[7]=res;break}
+      case 5:{res=a^v;this.f=szp(res)|2;this.r[7]=res;break}
+      default:{res=a|v;this.f=szp(res)|2;this.r[7]=res}
+    }
+  }
+  step(){
+    if(this.halted){this.t+=4;return 4}
+    const op=this.fetch(),r=this.r,x=op>>6,y=(op>>3)&7,z=op&7;let t=4;
+    switch(x){
+      case 0:
+        switch(z){
+          case 1:
+            if(y&1){const s=this.hl+this.rp(y>>1);this.f=(this.f&~1)|(s>65535?1:0);this.hl=s&65535}
+            else this.setrp(y>>1,this.i16());
+            t=10;break;
+          case 2:{
+            t=7;
+            switch(y){
+              case 0:this.wr((r[0]<<8)|r[1],r[7]);break;
+              case 1:r[7]=this.rd((r[0]<<8)|r[1]);break;
+              case 2:this.wr((r[2]<<8)|r[3],r[7]);break;
+              case 3:r[7]=this.rd((r[2]<<8)|r[3]);break;
+              case 4:{const a=this.i16();this.wr(a,r[5]);this.wr(a+1,r[4]);t=16;break}
+              case 5:{const a=this.i16();r[5]=this.rd(a);r[4]=this.rd(a+1);t=16;break}
+              case 6:{const a=this.i16();this.wr(a,r[7]);t=13;break}
+              default:{const a=this.i16();r[7]=this.rd(a);t=13}
+            }
+            break}
+          case 3:this.setrp(y>>1,this.rp(y>>1)+((y&1)?-1:1));t=5;break;
+          case 4:{const v=this.gr(y),res=(v+1)&255;this.f=(this.f&1)|szp(res)|((res&15)?0:0x10)|2;this.sr(y,res);t=y===6?10:5;break}
+          case 5:{const v=this.gr(y),res=(v-1)&255;this.f=(this.f&1)|szp(res)|(((res&15)===15)?0:0x10)|2;this.sr(y,res);t=y===6?10:5;break}
+          case 6:this.sr(y,this.i8());t=y===6?10:7;break;
+          case 7:{
+            const a=r[7],c=this.f&1;
+            switch(y){
+              case 0:{const k=a>>7;r[7]=((a<<1)|k)&255;this.f=(this.f&~1)|k;break}
+              case 1:{const k=a&1;r[7]=(a>>1)|(k<<7);this.f=(this.f&~1)|k;break}
+              case 2:{r[7]=((a<<1)|c)&255;this.f=(this.f&~1)|(a>>7);break}
+              case 3:{r[7]=(a>>1)|(c<<7);this.f=(this.f&~1)|(a&1);break}
+              case 4:{let corr=0,cy=c;const lsb=a&15,msb=a>>4;
+                if((this.f&0x10)||lsb>9)corr|=6;
+                if(c||msb>9||(msb>=9&&lsb>9)){corr|=0x60;cy=1}
+                const res=a+corr;this.f=szp(res&255)|cy|((a^corr^res)&0x10)|2;r[7]=res&255;break}
+              case 5:r[7]=(~a)&255;break;
+              case 6:this.f|=1;break;
+              default:this.f^=1
+            }
+            break}
+          default:t=4
+        }
+        break;
+      case 1:
+        if(op===0x76){this.halted=true;t=7}
+        else{this.sr(y,this.gr(z));t=(y===6||z===6)?7:5}
+        break;
+      case 2:this.alu(y,this.gr(z));t=z===6?7:4;break;
+      default:
+        switch(z){
+          case 0:if(this.cond(y)){this.pc=this.popw();t=11}else t=5;break;
+          case 1:
+            if(!(y&1)){const v=this.popw(),p=y>>1;
+              if(p===3){r[7]=v>>8;this.f=(v&0xD5)|2}else this.setrp(p,v);t=10}
+            else{const p=y>>1;if(p<2){this.pc=this.popw()}else if(p===2)this.pc=this.hl;else this.sp=this.hl;t=p<2?10:5}
+            break;
+          case 2:{const a=this.i16();if(this.cond(y))this.pc=a;t=10;break}
+          case 3:
+            switch(y){
+              case 0:case 1:this.pc=this.i16();t=10;break;
+              case 2:{const p=this.i8();this.bus((p<<8)|p,r[7],4);this.out(p,r[7]);t=10;break}
+              case 3:{const p=this.i8(),v=this.in(p)&255;this.bus((p<<8)|p,v,3);r[7]=v;t=10;break}
+              case 4:{this.stk=true;const lo=this.rd(this.sp),hi=this.rd(this.sp+1);this.wr(this.sp,r[5]);this.wr(this.sp+1,r[4]);this.stk=false;r[5]=lo;r[4]=hi;t=18;break}
+              case 5:{const d=r[2],e=r[3];r[2]=r[4];r[3]=r[5];r[4]=d;r[5]=e;break}
+              case 6:this.iff=0;break;
+              default:this.iff=1
+            }
+            break;
+          case 4:{const a=this.i16();if(this.cond(y)){this.pushw(this.pc);this.pc=a;t=17}else t=11;break}
+          case 5:
+            if(y&1){const a=this.i16();this.pushw(this.pc);this.pc=a;t=17}
+            else{const p=y>>1;this.pushw(p===3?(r[7]<<8)|(this.f&0xD5)|2:this.rp(p));t=11}
+            break;
+          case 6:this.alu(y,this.i8());t=7;break;
+          default:this.pushw(this.pc);this.pc=y*8;t=11
+        }
+    }
+    this.t+=t;this.n++;return t;
+  }
+}
+/* ================= 8080 disassembler ================= */
+const R8=['B','C','D','E','H','L','M','A'],RP=['B','D','H','SP'],RPP=['B','D','H','PSW'],CC=['NZ','Z','NC','C','PO','PE','P','M'];
+const ARI=['ADD','ADC','SUB','SBB','ANA','XRA','ORA','CMP'],ARI2=['ADI','ACI','SUI','SBI','ANI','XRI','ORI','CPI'];
+const h2=v=>(v&255).toString(16).toUpperCase().padStart(2,'0'),h4=v=>(v&65535).toString(16).toUpperCase().padStart(4,'0');
+function dis(m,pc){
+  const op=m[pc&65535],x=op>>6,y=(op>>3)&7,z=op&7,n8=()=>h2(m[(pc+1)&65535])+'H',n16=()=>h4(m[(pc+1)&65535]|(m[(pc+2)&65535]<<8))+'H';
+  let t='NOP',len=1;
+  if(x===0){
+    switch(z){
+      case 1:if(y&1)t='DAD '+RP[y>>1];else{t='LXI '+RP[y>>1]+','+n16();len=3}break;
+      case 2:t=['STAX B','LDAX B','STAX D','LDAX D','SHLD '+n16(),'LHLD '+n16(),'STA '+n16(),'LDA '+n16()][y];if(y>3)len=3;break;
+      case 3:t=((y&1)?'DCX ':'INX ')+RP[y>>1];break;
+      case 4:t='INR '+R8[y];break;case 5:t='DCR '+R8[y];break;
+      case 6:t='MVI '+R8[y]+','+n8();len=2;break;
+      case 7:t=['RLC','RRC','RAL','RAR','DAA','CMA','STC','CMC'][y];break;
+    }
+  }else if(x===1){t=op===0x76?'HLT':'MOV '+R8[y]+','+R8[z]}
+  else if(x===2){t=ARI[y]+' '+R8[z]}
+  else switch(z){
+    case 0:t='R'+CC[y];break;
+    case 1:t=(y&1)?['RET','RET','PCHL','SPHL'][y>>1]:'POP '+RPP[y>>1];break;
+    case 2:t='J'+CC[y]+' '+n16();len=3;break;
+    case 3:switch(y){case 0:case 1:t='JMP '+n16();len=3;break;case 2:t='OUT '+n8();len=2;break;case 3:t='IN '+n8();len=2;break;case 4:t='XTHL';break;case 5:t='XCHG';break;case 6:t='DI';break;default:t='EI'}break;
+    case 4:t='C'+CC[y]+' '+n16();len=3;break;
+    case 5:if(y&1){t='CALL '+n16();len=3}else t='PUSH '+RPP[y>>1];break;
+    case 6:t=ARI2[y]+' '+n8();len=2;break;
+    default:t='RST '+y;
+  }
+  return{t,len};
+}
+
+/* ================= programs (8080 machine code) ================= */
+const ascii=s=>Array.from(s,c=>c.charCodeAt(0));
+const PROGS=[
+  {id:'ktb',en:'Kill the Bit',fr:'Kill the Bit',
+   d:{en:'The classic front-panel game. A bit sweeps across the address lights; flip the sense switch under it (A15 to A8) to kill it. Miss and a second bit appears.',
+      fr:'Le jeu classique du panneau. Un bit parcourt les LED d’adresse ; basculez l’interrupteur correspondant (A15 à A8) pour le tuer. Raté, et un second bit apparaît.'},
+   b:[0x21,0,0, 0x16,0x80, 0x01,0x0E,0, 0x1A,0x1A,0x1A,0x1A, 0x19, 0xD2,0x08,0x00, 0xDB,0xFF, 0xAA, 0x0F, 0x57, 0xC3,0x08,0x00]},
+  {id:'cnt',en:'Binary counter',fr:'Compteur binaire',
+   d:{en:'Counts up on the programmed output lights (port FFh). Try the Slow speed to watch each bit change.',
+      fr:'Compte sur les LED de sortie programmée (port FFh). Choisissez la vitesse lente pour voir chaque bit changer.'},
+   b:[0x0E,0x00, 0x79, 0xD3,0xFF, 0x0C, 0x11,0x00,0x10, 0x1B, 0x7A, 0xB3, 0xC2,0x09,0x00, 0xC3,0x02,0x00]},
+  {id:'hello',en:'Hello terminal',fr:'Bonjour terminal',
+   d:{en:'Prints a message on the serial terminal (port 02h), then executes HLT. The HLTA light turns on.',
+      fr:'Affiche un message sur le terminal série (port 02h), puis exécute HLT. La LED HLTA s’allume.'},
+   b:[0x21,0x10,0, 0x7E, 0xB7, 0xCA,0x0E,0, 0xD3,0x02, 0x23, 0xC3,0x03,0, 0x76, 0x00, ...ascii('IMSAI 8080 ready.\r\n\r\nFlip RUN to run it again after RESET.\r\n'),0]},
+  {id:'echo',en:'Keyboard echo',fr:'Écho clavier',
+   d:{en:'Reads the serial port and sends every key back. Click the terminal, then type.',
+      fr:'Lit le port série et renvoie chaque touche. Cliquez sur le terminal, puis tapez.'},
+   b:[0xDB,0x03, 0xE6,0x02, 0xCA,0x00,0x00, 0xDB,0x02, 0xD3,0x02, 0xC3,0x00,0x00]},
+];
+
+/* ================= i18n ================= */
+const TXT={
+  en:{sub:'Front-panel simulation of an IMSAI 8080 with its own Intel 8080 core. JavaScript only, not connected to the Rust Z80 crate.',
+    term:'Terminal',termHint:'serial ports 02h / 03h',clear:'Clear',cpu:'CPU',dis:'Next instructions',mem:'Memory around PC',prog:'Programs and machine',choose:'Program',
+    autorun:'Run after loading',load:'Load',speed:'Speed',setsw:'Set switches (hex)',file:'Load a .bin or .hex file',addr:'.bin address (hex)',
+    guide:'How to use the panel',
+    note:'Flags follow the 8080 (S, Z, AC, P, CY). Memory is 64 KB RAM, protect covers 0000h to 00FFh.',
+    spdN:['Slow (20 kHz)','Real time (2 MHz)','Turbo (20 MHz)'],
+    stRun:'running',stStop:'stopped',stHalt:'halted (HLT)',stOff:'power off',
+    g:['Set the 16 toggles, then flip EXAMINE up to load that address into the program counter.','DEPOSIT up stores the low 8 switches at that address. DEPOSIT NEXT moves to the next address first.','EXAMINE NEXT moves to the next address and shows its byte on the DATA lights.','SINGLE STEP runs one instruction. RUN starts, STOP halts, RESET returns the counter to 0000h.','Toggles A15 to A8 are also the sense switches read by IN FFh. OUT FFh drives PROGRAMMED OUTPUT.','Keyboard: Tab to a toggle and press Space or Enter.'],
+    mhz:'MHz',instr:'instr'},
+  fr:{sub:'Simulation de la face avant d’un IMSAI 8080 avec son propre cœur Intel 8080. JavaScript uniquement, non connecté au crate Rust Z80.',
+    term:'Terminal',termHint:'ports série 02h / 03h',clear:'Effacer',cpu:'CPU',dis:'Instructions suivantes',mem:'Mémoire autour du PC',prog:'Programmes et machine',choose:'Programme',
+    autorun:'Lancer après chargement',load:'Charger',speed:'Vitesse',setsw:'Régler les interrupteurs (hex)',file:'Charger un fichier .bin ou .hex',addr:'Adresse du .bin (hex)',
+    guide:'Utiliser le panneau',
+    note:'Les drapeaux suivent le 8080 (S, Z, AC, P, CY). 64 Ko de RAM, la protection couvre 0000h à 00FFh.',
+    spdN:['Lent (20 kHz)','Temps réel (2 MHz)','Turbo (20 MHz)'],
+    stRun:'en marche',stStop:'arrêté',stHalt:'stoppé (HLT)',stOff:'hors tension',
+    g:['Réglez les 16 interrupteurs, puis poussez EXAMINE vers le haut pour charger cette adresse dans le compteur ordinal.','DEPOSIT vers le haut écrit les 8 interrupteurs de poids faible à cette adresse. DEPOSIT NEXT passe d’abord à l’adresse suivante.','EXAMINE NEXT passe à l’adresse suivante et affiche son octet sur les LED DATA.','SINGLE STEP exécute une instruction. RUN démarre, STOP arrête, RESET remet le compteur à 0000h.','Les interrupteurs A15 à A8 sont aussi les sense switches lus par IN FFh. OUT FFh pilote PROGRAMMED OUTPUT.','Clavier : Tab jusqu’à un interrupteur puis Espace ou Entrée.'],
+    mhz:'MHz',instr:'instr'}
+};
+let lang=(navigator.language||'en').toLowerCase().startsWith('fr')?'fr':'en';
+try{const s=localStorage.getItem('imsai-lang');if(s==='fr'||s==='en')lang=s}catch(e){}
+const T=k=>TXT[lang][k];
+
+/* ================= machine ================= */
+const cpu=new CPU8080();
+const M={power:true,run:false,sw:new Array(16).fill(0),dispA:0,dispD:0,outLatch:0,speed:1,budget:0,rx:[],term:'',mhz:0,tPrev:0,tTime:0};
+const HZ=[20000,2000000,20000000],STRIDE=[1,1,8];
+cpu.in=p=>{
+  if(p===0xFF)return swVal()>>8;
+  if(p===3)return 5|(M.rx.length?2:0);
+  if(p===2)return M.rx.length?M.rx.shift():0;
+  return 0;
+};
+cpu.out=(p,v)=>{
+  if(p===0xFF)M.outLatch=v;
+  else if(p===2)termPut(v&0x7F);
+};
+function swVal(){let v=0;for(let i=0;i<16;i++)if(M.sw[i])v|=1<<i;return v}
+function show(){M.dispA=cpu.pc;M.dispD=cpu.m[cpu.pc]}
+function loadBytes(bytes,org){for(let i=0;i<bytes.length;i++)cpu.m[(org+i)&65535]=bytes[i]}
+
+/* ---- panel actions ---- */
+const A={
+  power(on){M.power=on;if(!on){M.run=false}else{cpu.pc=0;cpu.halted=false;show()}paintStatic()},
+  run(){if(!M.power)return;M.run=true;M.budget=0;cpu.clearDuty()},
+  stop(){if(!M.power)return;M.run=false;show()},
+  step(){if(!M.power||M.run)return;cpu.clearDuty();cpu.stride=1;cpu.step();show()},
+  exam(){if(!M.power||M.run)return;cpu.pc=swVal();cpu.halted=false;show()},
+  examNext(){if(!M.power||M.run)return;cpu.pc=(cpu.pc+1)&65535;show()},
+  dep(){if(!M.power||M.run)return;if(!cpu.prot||cpu.pc>=0x100)cpu.m[cpu.pc]=swVal()&255;show()},
+  depNext(){if(!M.power||M.run)return;cpu.pc=(cpu.pc+1)&65535;A.dep()},
+  reset(){if(!M.power)return;cpu.pc=0;cpu.halted=false;M.run=false;show()},
+  clr(){if(!M.power)return;M.outLatch=0;M.rx.length=0;cpu.halted=false},
+  prot(on){cpu.prot=on}
+};
+
+/* ---- build panel ---- */
+const $=id=>document.getElementById(id);
+const panel=$('panel');
+const el=(tag,cls,html)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(html!==undefined)e.innerHTML=html;return e};
+const leds={a:[],d:[],o:[],s:{}};
+function mkLed(cls){const l=el('span','led'+(cls?' '+cls:''),'<i></i>');return l}
+function ledRow(arr,bits,groups,pref,label){
+  const row=el('div','row');let bit=bits-1;
+  for(const g of groups){
+    const o=el('div','oct');
+    for(let k=0;k<g;k++){
+      const c=el('div','cell'),l=mkLed();arr[bit]=l.firstChild;c.append(l,el('span','',String(bit)));o.append(c);bit--;
+    }
+    row.append(o);
+  }
+  return row;
+}
+function build(){
+  const plate=el('div','plate');plate.id='plate';
+  plate.append(el('div','brand','<span class="logo">IMSAI</span><span class="model">8080</span><span class="bars"><b></b><b></b><b></b></span><span class="mfg">MICROCOMPUTER SYSTEM</span>'));
+  const b1=el('div','band');
+  const gA=el('div','grp');gA.append(el('h6','','ADDRESS'));gA.append(ledRow(leds.a,16,[1,3,3,3,3,3]));
+  const gD=el('div','grp');gD.append(el('h6','','DATA'));gD.append(ledRow(leds.d,8,[2,3,3]));
+  b1.append(gA,gD);
+  const b2=el('div','band');b2.style.marginTop='16px';
+  const gS=el('div','grp');gS.append(el('h6','','STATUS'));
+  const sr=el('div','statusrow');
+  const names=['INTE','PROT','MEMR','INP','M1','OUT','HLTA','STACK','WO','INT','|','WAIT','RUN','HOLD'];
+  for(const n of names){
+    if(n==='|'){sr.append(el('div','sep'));continue}
+    const c=el('div','cell'),l=mkLed(n==='RUN'||n==='WAIT'||n==='HOLD'?'amber':'');
+    c.append(l,el('span','nm',n));sr.append(c);leds.s[n]=l.firstChild;
+  }
+  gS.append(sr);
+  const gO=el('div','grp');gO.append(el('h6','','PROGRAMMED OUTPUT'));gO.append(ledRow(leds.o,8,[2,3,3]));
+  b2.append(gS,gO);
+  const sw=el('div','swarea');
+  const gsw=el('div','grp');gsw.append(el('h6','','ADDRESS / DATA / SENSE'));
+  const swrow=el('div','row');swrow.style.alignItems='flex-start';
+  let bit=15;
+  for(const g of [1,3,3,3,3,3]){
+    const o=el('div','oct');
+    for(let k=0;k<g;k++){
+      const i=bit,c=el('div','swcell'),t=el('button','tog');
+      t.type='button';t.setAttribute('role','switch');t.setAttribute('aria-checked','false');t.setAttribute('aria-label','Switch A'+i);
+      t.append(el('span','slot'),el('span','lever'));
+      t.onclick=()=>{M.sw[i]^=1;t.classList.toggle('on',!!M.sw[i]);t.setAttribute('aria-checked',M.sw[i]?'true':'false');syncSwHex()};
+      c.append(t,el('div','swlabel',String(i)));o.append(c);bit--;
+    }
+    swrow.append(o);
+  }
+  gsw.append(swrow);
+  gsw.append(el('div','swcap','SENSE SWITCHES = A15 to A8  ·  DATA = A7 to A0'));
+  sw.append(gsw);
+  const gc=el('div','grp');gc.append(el('h6','','CONTROL'));
+  const crow=el('div','row');crow.style.gap='6px';
+  const defs=[
+    {k:'power',up:'ON',dn:'OFF',latch:true,init:true},
+    {k:'run',up:'RUN',dn:'STOP'},
+    {k:'step',up:'SINGLE STEP',dn:'&nbsp;'},
+    {k:'exam',up:'EXAMINE',dn:'EXAMINE NEXT'},
+    {k:'dep',up:'DEPOSIT',dn:'DEPOSIT NEXT'},
+    {k:'reset',up:'RESET',dn:'EXT CLR'},
+    {k:'prot',up:'PROTECT',dn:'UNPROTECT',latch:true,init:false},
+  ];
+  for(const d of defs){
+    const c=el('div','ctlcell');c.append(el('div','up',d.up));
+    const t=el('div','tog ctl'+(d.latch?'':' mom'));
+    t.append(el('span','slot'),el('span','lever'));
+    if(d.latch){
+      const b=el('button','hit');b.type='button';b.style.cssText='position:absolute;inset:0;background:none;border:0;cursor:pointer';
+      b.setAttribute('role','switch');b.setAttribute('aria-label',d.up+' / '+d.dn);b.setAttribute('aria-checked',String(d.init));
+      t.classList.toggle('on',d.init);
+      b.onclick=()=>{const on=!t.classList.contains('on');t.classList.toggle('on',on);b.setAttribute('aria-checked',String(on));A[d.k](on)};
+      t.append(b);
+    }else{
+      const fn=d.k==='run'?['run','stop']:d.k==='step'?['step',null]:d.k==='exam'?['exam','examNext']:d.k==='dep'?['dep','depNext']:['reset','clr'];
+      const mk=(cls,act,label,dir)=>{
+        const b=el('button','hit '+cls);b.type='button';b.setAttribute('aria-label',label);
+        b.onclick=()=>{if(!act)return;t.classList.add(dir);setTimeout(()=>t.classList.remove(dir),150);A[act]()};
+        return b;
+      };
+      t.append(mk('u',fn[0],d.up.replace('&nbsp;',''),'up'),mk('d',fn[1],d.dn.replace('&nbsp;','')||'none','dn'));
+    }
+    c.append(t,el('div','dn',d.dn));crow.append(c);
+  }
+  gc.append(crow);sw.append(gc);
+  plate.append(b1,b2,sw);
+  plate.append(el('div','hint','SERIAL I/O  02H DATA  03H STATUS'),el('div','hint2','MEMORY 64K  ·  CPU 8080'));
+  panel.append(plate);
+}
+build();
+const plateEl=$('plate');
+
+/* ---- scaling ---- */
+function fit(){
+  const s=$('stage'),w=s.clientWidth,k=Math.min(2.2,w/1400);
+  panel.style.transform='scale('+k+')';s.style.height=Math.ceil(440*k)+'px';
+}
+new ResizeObserver(fit).observe($('stage'));fit();
+
+/* ---- terminal ---- */
+function termPut(c){
+  if(c===13)return;
+  if(c===10)M.term+='\n';
+  else if(c===8||c===127)M.term=M.term.slice(0,-1);
+  else if(c>=32||c===9)M.term+=String.fromCharCode(c);
+  if(M.term.length>6000)M.term=M.term.slice(-5000);
+  M.termDirty=true;
+}
+function paintTerm(){
+  const t=$('term'),atEnd=t.scrollTop+t.clientHeight>=t.scrollHeight-8;
+  t.textContent=M.term;t.append(el('span','cur',' '));
+  if(atEnd)t.scrollTop=t.scrollHeight;M.termDirty=false;
+}
+$('term').addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  let c=null;
+  if(e.key==='Enter')c=13;else if(e.key==='Backspace')c=8;else if(e.key==='Tab'&&false)c=9;
+  else if(e.key.length===1)c=e.key.charCodeAt(0)&0x7F;
+  if(c!==null){M.rx.push(c);e.preventDefault()}
+});
+$('clr').onclick=()=>{M.term='';paintTerm()};
+
+/* ---- painting ---- */
+const sq=v=>Math.min(1,Math.sqrt(Math.max(0,v))*1.15);
+const setL=(e,v)=>{e.style.setProperty('--b',M.power?v.toFixed(2):'0')};
+function paintLeds(){
+  plateEl.classList.toggle('off',!M.power);
+  const n=cpu.aN;
+  if(M.run&&n>0){
+    for(let i=0;i<16;i++)setL(leds.a[i],sq(cpu.aA[i]/n));
+    for(let i=0;i<8;i++)setL(leds.d[i],sq(cpu.aD[i]/n));
+    setL(leds.s.MEMR,sq(cpu.st[1]/n));setL(leds.s.M1,sq(cpu.st[0]/n));setL(leds.s.INP,sq(cpu.st[2]/n));
+    setL(leds.s.OUT,sq(cpu.st[3]/n));setL(leds.s.WO,sq(cpu.st[4]/n));setL(leds.s.STACK,sq(cpu.st[5]/n));
+  }else{
+    const a=M.run?cpu.lastA:M.dispA,d=M.run?cpu.lastD:M.dispD;
+    for(let i=0;i<16;i++)setL(leds.a[i],(a>>i)&1);
+    for(let i=0;i<8;i++)setL(leds.d[i],(d>>i)&1);
+    for(const k of ['MEMR','M1','INP','OUT','WO','STACK'])setL(leds.s[k],0);
+    if(!M.run)setL(leds.s.MEMR,1);
+  }
+  for(let i=0;i<8;i++)setL(leds.o[i],(M.outLatch>>i)&1);
+  setL(leds.s.INTE,cpu.iff?1:0);setL(leds.s.PROT,cpu.prot?1:0);setL(leds.s.HLTA,cpu.halted?1:0);
+  setL(leds.s.WAIT,M.run?0:1);setL(leds.s.RUN,M.run?1:0);setL(leds.s.HOLD,0);setL(leds.s.INT,0);
+}
+function paintStatic(){paintLeds();paintInfo(true)}
+let lastInfo=0;
+function paintInfo(force){
+  const now=performance.now();if(!force&&now-lastInfo<110)return;lastInfo=now;
+  const r=cpu.r,names=['B','C','D','E','H','L','M','A'];
+  const regs=[['A',h2(r[7])],['B',h2(r[0])],['C',h2(r[1])],['D',h2(r[2])],['E',h2(r[3])],['H',h2(r[4])],['L',h2(r[5])],['F',h2(cpu.f)],['PC',h4(cpu.pc)],['SP',h4(cpu.sp)],['BC',h4((r[0]<<8)|r[1])],['DE',h4((r[2]<<8)|r[3])],['HL',h4(cpu.hl)]];
+  $('regs').innerHTML=regs.map(x=>'<div><b>'+x[0]+'</b>'+x[1]+'</div>').join('');
+  const f=cpu.f;$('flags').innerHTML=[['S',0x80],['Z',0x40],['AC',0x10],['P',4],['CY',1]].map(x=>'<span class="'+((f&x[1])?'on':'')+'">'+x[0]+'</span>').join('');
+  let a=cpu.pc,lines=[];
+  for(let i=0;i<9;i++){const d=dis(cpu.m,a);let by='';for(let k=0;k<3;k++)by+=k<d.len?h2(cpu.m[(a+k)&65535])+' ':'   ';
+    lines.push((i===0?'<span class="cur">':'')+h4(a)+'  '+by+' '+d.t+(i===0?'</span>':''));a=(a+d.len)&65535}
+  $('dis').innerHTML=lines.join('\n');
+  const base=cpu.pc&0xFFF0;let ml=[];
+  for(let row=-1;row<3;row++){const ad=(base+row*16)&65535;let s=h4(ad)+'  ';
+    for(let k=0;k<16;k++){const q=(ad+k)&65535,v=h2(cpu.m[q]);s+=(q===cpu.pc?'<b>'+v+'</b>':v)+(k===7?'  ':' ')}ml.push(s)}
+  $('mem').innerHTML=ml.join('\n');
+  $('state').textContent=!M.power?T('stOff'):cpu.halted?T('stHalt'):M.run?T('stRun'):T('stStop');
+  $('stats').textContent=(M.run?M.mhz.toFixed(2):'0.00')+' '+T('mhz')+'  ·  '+cpu.n.toLocaleString(lang==='fr'?'fr-FR':'en-US')+' '+T('instr')+'  ·  '+cpu.t.toLocaleString(lang==='fr'?'fr-FR':'en-US')+' T';
+}
+
+/* ---- main loop ---- */
+let lastTs=performance.now();
+function frame(ts){
+  const dt=Math.min(ts-lastTs,50);lastTs=ts;
+  if(M.power&&M.run){
+    cpu.stride=STRIDE[M.speed];cpu.clearDuty();
+    M.budget+=dt/1000*HZ[M.speed];
+    let spent=0;
+    while(spent<M.budget){
+      spent+=cpu.step();
+      if(cpu.halted){M.budget=0;break}
+    }
+    if(!cpu.halted)M.budget-=spent;
+    if(ts-M.tTime>500){M.mhz=(cpu.t-M.tPrev)/((ts-M.tTime)/1000)/1e6;M.tPrev=cpu.t;M.tTime=ts}
+  }
+  paintLeds();paintInfo(false);
+  if(M.termDirty)paintTerm();
+  requestAnimationFrame(frame);
+}
+
+/* ---- program / file loading ---- */
+function loadProgram(id,run){
+  const p=PROGS.find(x=>x.id===id);cpu.m.fill(0);loadBytes(p.b,0);
+  cpu.pc=0;cpu.halted=false;cpu.t=0;cpu.n=0;M.outLatch=0;M.rx.length=0;M.term='';M.termDirty=true;
+  M.run=false;show();M.mhz=0;M.tPrev=0;
+  if(run)A.run();
+  paintStatic();
+}
+function parseHex(txt){
+  const out=[];for(const ln of txt.split(/\r?\n/)){
+    if(ln[0]!==':')continue;const n=parseInt(ln.substr(1,2),16),ad=parseInt(ln.substr(3,4),16),ty=parseInt(ln.substr(7,2),16);
+    if(ty===0)for(let i=0;i<n;i++)out.push([ad+i,parseInt(ln.substr(9+i*2,2),16)]);
+  }
+  return out;
+}
+$('file').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  if(/\.hex$/i.test(f.name)){
+    rd.onload=()=>{cpu.m.fill(0);for(const[a,v]of parseHex(String(rd.result)))cpu.m[a&65535]=v;afterFile()};rd.readAsText(f);
+  }else{
+    rd.onload=()=>{const org=parseInt($('faddr').value||'0',16)||0;cpu.m.fill(0);loadBytes(new Uint8Array(rd.result),org);afterFile(org)};rd.readAsArrayBuffer(f);
+  }
+};
+function afterFile(org){cpu.pc=org||0;cpu.halted=false;cpu.t=0;cpu.n=0;M.term='';M.termDirty=true;M.run=false;show();if($('auto').checked)A.run();paintStatic()}
+
+/* ---- sidebar controls ---- */
+function syncSwHex(){$('swhex').value=h4(swVal())}
+$('swhex').oninput=e=>{
+  const v=parseInt(e.target.value,16);if(isNaN(v))return;
+  const tg=panel.querySelectorAll('.swcell .tog');
+  for(let i=0;i<16;i++){const on=(v>>i)&1;M.sw[i]=on;tg[15-i].classList.toggle('on',!!on);tg[15-i].setAttribute('aria-checked',on?'true':'false')}
+};
+$('spd').onchange=e=>{M.speed=+e.target.value;M.budget=0};
+$('psel').onchange=()=>{fillProgDesc()};
+$('pload').onclick=()=>loadProgram($('psel').value,$('auto').checked);
+function fillProgDesc(){const p=PROGS.find(x=>x.id===$('psel').value);$('pdesc').textContent=p.d[lang]}
+
+/* ---- i18n apply ---- */
+function applyLang(){
+  document.documentElement.lang=lang;$('sub').textContent=T('sub');
+  document.querySelectorAll('[data-t]').forEach(n=>{n.textContent=T(n.dataset.t)});
+  const ps=$('psel'),cur=ps.value||'ktb';ps.innerHTML=PROGS.map(p=>'<option value="'+p.id+'">'+p[lang]+'</option>').join('');ps.value=cur;fillProgDesc();
+  const sp=$('spd'),cs=sp.value||String(M.speed);sp.innerHTML=T('spdN').map((n,i)=>'<option value="'+i+'">'+n+'</option>').join('');sp.value=cs;
+  $('guide').innerHTML=T('g').map(g=>'<li>'+g+'</li>').join('');
+  $('lang').textContent=lang==='fr'?'EN':'FR';$('lang').setAttribute('aria-label',lang==='fr'?'Switch to English':'Passer en français');
+  paintInfo(true);
+}
+$('lang').onclick=()=>{lang=lang==='fr'?'en':'fr';try{localStorage.setItem('imsai-lang',lang)}catch(e){}applyLang()};
+
+/* ---- start: Kill the Bit already running ---- */
+applyLang();
+loadProgram('ktb',true);
+paintTerm();
+window.__imsai={cpu,M,A,loadProgram,dis};
+requestAnimationFrame(frame);
+</script>
+
+</body></html>
