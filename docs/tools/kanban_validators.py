@@ -70,11 +70,17 @@ def main():
         vid = json.loads(out[out.index("{"):])["id"]
         if status in ("todo", "ready"):
             hermes(a.board, "set-model", card, a.model, "--provider", a.provider)
-        for c in children:
+        # next card(s) of the chain: board children of X plus the next imported task of the chain.
+        # IMPORTANT: link V -> child FIRST, unlink X -> child AFTER, so a child never has zero parents
+        # (a parentless card becomes ready and the dispatcher would start it out of order).
+        nxt = [idmap[n["id"]] for n in tasks[tasks.index(t) + 1:] if n["id"] in idmap][:1]
+        for c in dict.fromkeys([*children, *nxt]):
             if c == vid:
                 continue
-            hermes(a.board, "unlink", card, c); hermes(a.board, "link", vid, c)
-        print("%s -> %s-V %s (children relinked: %d)" % (card, tid, vid, len([c for c in children if c != vid])))
+            hermes(a.board, "link", vid, c)
+            if c in children:
+                hermes(a.board, "unlink", card, c)
+        print("%s -> %s-V %s (children relinked: %d)" % (card, tid, vid, len([c for c in dict.fromkeys([*children, *nxt]) if c != vid])))
 
 if __name__ == "__main__":
     main()
