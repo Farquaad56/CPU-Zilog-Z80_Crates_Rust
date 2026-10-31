@@ -11,6 +11,7 @@ OUT = ROOT / "crates" / "puce-z80" / "src" / "tables"
 ADDR = {'PC+': 'PcInc', 'SP': 'Sp', 'SP+': 'SpInc', 'SP+1': 'SpPlus1', '-SP': 'DecSp', 'HL': 'Hl', 'BC': 'Bc', 'DE': 'De',
         'NN': 'Nn', 'NN+1': 'NnPlus1', 'XY': 'Xy', 'AN': 'An'}
 KIND = {'F': 'F', 'R': 'R', 'W': 'W', 'N': 'N', 'O': 'O', 'I': 'I', 'X': 'X'}
+REG = {'OP': 'Op'}
 TOK = re.compile(r'^(\?)?([FRWNOIX])(\d+)(?::([A-Z0-9+\-]+)([<>])([A-Z]+))?$')
 
 def tok(t):
@@ -19,7 +20,8 @@ def tok(t):
         raise SystemExit("bad token %r" % t)
     cond, k, n, addr, _dir, reg = m.groups()
     a = 'Addr::None' if addr is None else 'Addr::' + ADDR[addr]
-    r = 'Reg::None' if reg is None else 'Reg::' + reg
+    rname = REG.get(reg, reg) if reg is not None else None
+    r = 'Reg::None' if rname is None else 'Reg::' + rname
     return "Tok::new(Kind::%s, %s, %s, %s, %s)" % (KIND[k], n, a, r, 'true' if cond else 'false')
 
 def gen(name, const):
@@ -59,5 +61,5 @@ if __name__ == "__main__":
     for n, c in (('main', 'MAIN'), ('cb', 'CB'), ('ed', 'ED'), ('ddfd', 'DDFD'), ('ddcb', 'DDCB')):
         gen(n, c)
     gen_mnem()
-    (OUT / "mod.rs").write_text("// GENERATED - declares the generated tables.\npub mod main;\npub mod cb;\npub mod ed;\npub mod ddfd;\npub mod ddcb;\n#[cfg(feature = \"disasm\")]\npub mod mnem;\n", encoding="ascii", newline="\n")
+    (OUT / "mod.rs").write_text("// GENERATED - declares the generated tables.\n#![allow(dead_code)]\npub mod main;\npub mod cb;\npub mod ed;\npub mod ddfd;\npub mod ddcb;\n#[cfg(feature = \"disasm\")]\npub mod mnem;\n", encoding="ascii", newline="\n")
     print("tables written to", OUT)

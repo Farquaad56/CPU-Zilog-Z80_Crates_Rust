@@ -18,19 +18,34 @@ pub use pins::Pins;
 pub use regs::Regs;
 
 // Module declarations - uncommented as each is implemented in subsequent tasks.
-pub mod pins; // Pin state and accessors
-pub mod regs; // Register file and flag constants
-              // pub mod bus;          // Bus trait and SimpleRam test implementation
-              // pub mod cpu;          // Cpu struct: new/reset/tick/step/at_instruction_boundary
-              // pub mod engine;       // Execution engine (decode, plan, mcycle)
-              // pub mod alu;          // Pure ALU flag functions
-              // pub mod sem;          // Instruction semantics dispatch
-              // pub mod int;          // NMI, INT, HALT, RESET handling
-              // pub mod tables;       // Generated opcode decode tables
-              // #[cfg(feature = "inspect")]
-              // pub mod probe;        // Inspection journal and history
-              // #[cfg(feature = "disasm")]
-              // pub mod disasm;       // Disassembler
+// Execution engine (decode, plan, mcycle).
+pub(crate) mod engine;
+// Pin state and accessors.
+pub mod pins;
+// Register file and flag constants.
+pub mod regs;
+// Generated opcode decode tables.
+pub(crate) mod tables;
+// Planned modules (enable in the task that implements them):
+// pub mod bus;     Bus trait and SimpleRam test implementation
+// pub mod cpu;     Cpu struct: new/reset/tick/step/at_instruction_boundary
+// pub mod alu;     Pure ALU flag functions
+// pub mod sem;     Instruction semantics dispatch
+// pub mod int;     NMI, INT, HALT, RESET handling
+
+/// Internal API exposed for integration tests.
+#[doc(hidden)]
+pub mod __internal {
+    pub use crate::engine::decode::plan_of;
+    pub use crate::engine::decode::{decode, Decoded, Table};
+}
+
+#[cfg(test)]
+mod tables_check;
+// #[cfg(feature = "inspect")]
+// pub mod probe;        // Inspection journal and history
+// #[cfg(feature = "disasm")]
+// pub mod disasm;       // Disassembler
 
 #[cfg(test)]
 mod tests {
