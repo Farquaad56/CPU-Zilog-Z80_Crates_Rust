@@ -5,5 +5,6 @@
 #![allow(dead_code)]
 
 pub mod crc;
+pub mod diffbus;
 pub mod trace;
 pub mod tsv;
