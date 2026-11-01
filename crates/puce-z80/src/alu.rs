@@ -16,9 +16,9 @@ pub fn alu8(op: u8, a: u8, b: u8, f: u8) -> (u8, u8) {
         1 => adc8(a, b, f),
         2 => sub8(a, b),
         3 => sbc8(a, b, f),
-        4 => unreachable!("AND not implemented in E04-02"),
-        5 => unreachable!("XOR not implemented in E04-02"),
-        6 => unreachable!("OR not implemented in E04-02"),
+        4 => and8(a, b),
+        5 => xor8(a, b),
+        6 => or8(a, b),
         7 => cp8(a, b),
         _ => unreachable!("invalid 8-bit ALU op"),
     }
@@ -94,6 +94,34 @@ fn compute_sub_flags_with_xy(a: u8, b: u8, res: u8, t: u16, xy_src: u8) -> u8 {
     if (t >> 8) != 0 {
         flags |= flag::C;
     }
+    flags
+}
+
+fn and8(a: u8, b: u8) -> (u8, u8) {
+    let res = a & b;
+    let flags = compute_logic_flags(res, flag::H);
+    (res, flags)
+}
+
+fn xor8(a: u8, b: u8) -> (u8, u8) {
+    let res = a ^ b;
+    let flags = compute_logic_flags(res, 0);
+    (res, flags)
+}
+
+fn or8(a: u8, b: u8) -> (u8, u8) {
+    let res = a | b;
+    let flags = compute_logic_flags(res, 0);
+    (res, flags)
+}
+
+fn compute_logic_flags(res: u8, h: u8) -> u8 {
+    let mut flags = res & 0xA8; // S, Y, X from result
+    if res == 0 {
+        flags |= flag::Z;
+    }
+    flags |= h;
+    flags |= parity(res);
     flags
 }
 

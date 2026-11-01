@@ -135,3 +135,40 @@ fn e04_02_add_example() {
     assert_eq!(a, 0x80);
     assert_eq!(f, 0x94);
 }
+
+#[test]
+fn e04_03_alu8_and() {
+    let (count, crc) = alu8_crc(4);
+    let (exp_count, exp_crc) = alu_crc("alu8_and");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "AND CRC mismatch");
+}
+
+#[test]
+fn e04_03_alu8_xor() {
+    let (count, crc) = alu8_crc(5);
+    let (exp_count, exp_crc) = alu_crc("alu8_xor");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "XOR CRC mismatch");
+}
+
+#[test]
+fn e04_03_alu8_or() {
+    let (count, crc) = alu8_crc(6);
+    let (exp_count, exp_crc) = alu_crc("alu8_or");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "OR CRC mismatch");
+}
+
+#[test]
+fn e04_03_and_h_set() {
+    let (_, f) = alu8(4, 0xFF, 0x0F, 0);
+    assert_eq!(f & 0x10, 0x10, "AND must set H flag");
+}
+
+#[test]
+fn e04_03_xor_zero() {
+    let (a, f) = alu8(5, 0xAA, 0xAA, 0xFF);
+    assert_eq!(a, 0);
+    assert_eq!(f, 0x44);
+}
