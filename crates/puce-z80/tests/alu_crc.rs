@@ -313,7 +313,7 @@ fn e04_05_sll_sets_bit0() {
     assert_eq!(r, 0x01, "SLL of 0 must set bit 0");
 }
 
-use puce_z80::alu::{adc16, add16, sbc16};
+use puce_z80::alu::{adc16, add16, daa, sbc16};
 
 /// CRC test for add16 across sampled inputs and flag states.
 fn add16_crc() -> (u64, u32) {
@@ -420,4 +420,36 @@ fn e04_06_sbc16_zero() {
     assert_eq!(r, 0, "sbc16(0x1234, 0x1234, 0) must produce 0");
     assert_eq!(f & 0x40, 0x40, "sbc16 equal values must set Z");
     assert_eq!(f & 0x02, 0x02, "sbc16 must set N");
+}
+
+/// CRC test for daa across all 65536 (a, f) combinations.
+fn daa_crc() -> (u64, u32) {
+    let mut crc = Crc32::new();
+    let mut count = 0u64;
+    for a in 0u8..=255 {
+        for f in 0u8..=255 {
+            let (a2, f2) = daa(a, f);
+            crc.update(a2);
+            crc.update(f2);
+            count += 1;
+        }
+    }
+    (count, crc.finish())
+}
+
+#[test]
+fn e04_07_daa() {
+    let (count, crc) = daa_crc();
+    let (exp_count, exp_crc) = alu_crc("daa");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "daa CRC mismatch");
+}
+
+#[test]
+fn e04_07_daa_after_add() {
+    // After adding 0x0A (not a valid BCD digit), DAA must adjust to 0x10
+    // with half-carry set.
+    let (a, f) = daa(0x0A, 0);
+    assert_eq!(a, 0x10, "daa(0x0A, 0) must produce 0x10");
+    assert_eq!(f & 0x10, 0x10, "daa(0x0A, 0) must set H flag");
 }

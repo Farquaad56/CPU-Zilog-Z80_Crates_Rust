@@ -312,3 +312,59 @@ pub fn sbc16(a: u16, b: u16, f: u8) -> (u16, u8) {
     }
     (res, flags)
 }
+
+/// DAA: Decimal Adjust Accumulator.
+///
+/// Adjusts the accumulator after BCD addition or subtraction.
+/// `a` is the accumulator value, `f` is the current flags register.
+/// Returns the adjusted accumulator value and new flags.
+pub fn daa(a: u8, f: u8) -> (u8, u8) {
+    let mut add = 0u8;
+    let mut c = 0u8;
+
+    // Lower nibble adjustment
+    if (f & flag::H) != 0 || (a & 0x0F) > 9 {
+        add |= 6;
+    }
+    // Upper nibble adjustment
+    if (f & flag::C) != 0 || a > 0x99 {
+        add |= 0x60;
+        c = 1;
+    }
+
+    let res = if (f & flag::N) != 0 {
+        // Subtraction: subtract the adjustment
+        a.wrapping_sub(add)
+    } else {
+        // Addition: add the adjustment
+        a.wrapping_add(add)
+    };
+
+    // Recompute flags
+    let mut flags = res & 0xA8; // S, Y, X from result
+    if res == 0 {
+        flags |= flag::Z;
+    }
+    flags |= parity(res);
+    flags |= f & flag::N; // N is preserved
+
+    // H flag: recomputed based on operation
+    if (f & flag::N) != 0 {
+        // Subtraction: H set if (old H set AND lower nibble < 6)
+        if (f & flag::H) != 0 && (a & 0x0F) < 6 {
+            flags |= flag::H;
+        }
+    } else {
+        // Addition: H set if lower nibble > 9
+        if (a & 0x0F) > 9 {
+            flags |= flag::H;
+        }
+    }
+
+    // C flag
+    if c != 0 {
+        flags |= flag::C;
+    }
+
+    (res, flags)
+}
