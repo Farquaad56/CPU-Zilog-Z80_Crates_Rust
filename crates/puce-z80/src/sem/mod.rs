@@ -326,4 +326,53 @@ mod tests {
         sem(&mut cpu, Table::Main, 0x36, 0);
         assert_eq!(cpu.eng.tmp_l, 0xFF, "LD (HL),n leaves tmp_l unchanged");
     }
+
+    #[test]
+    fn e05_05_wz_ld_bc_a() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x1234);
+        cpu.regs.a = 0xAB;
+        // LD (BC),A (opcode 0x02): WZ = ((BC+1)&0xFF) | (A<<8)
+        sem(&mut cpu, Table::Main, 0x02, 0);
+        let expected_wz: u16 = 0xAB35;
+        assert_eq!(cpu.regs.wz, expected_wz, "LD (BC),A WZ formula");
+        assert_eq!(cpu.eng.tmp_l, 0xAB, "LD (BC),A stores A in tmp_l");
+    }
+
+    #[test]
+    fn e05_05_wz_ld_a_bc() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x1234);
+        cpu.eng.tmp_l = 0xCD; // Simulate memory read into tmp_l
+                              // LD A,(BC) (opcode 0x0A): WZ = BC+1
+        sem(&mut cpu, Table::Main, 0x0A, 0);
+        assert_eq!(cpu.regs.wz, 0x1235, "LD A,(BC) WZ = BC+1");
+        assert_eq!(cpu.regs.a, 0xCD, "LD A,(BC) loads tmp_l into A");
+    }
+
+    #[test]
+    fn e05_05_ld_a_nn() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x2000; // nn address already in WZ from data fetch phase
+        cpu.eng.tmp_l = 0xEF; // Simulate memory read into tmp_l
+                              // LD A,(nn) (opcode 0x3A): WZ = nn+1
+        sem(&mut cpu, Table::Main, 0x3A, 0);
+        assert_eq!(cpu.regs.wz, 0x2001, "LD A,(nn) WZ = nn+1");
+        assert_eq!(cpu.regs.a, 0xEF, "LD A,(nn) loads tmp_l into A");
+    }
+
+    #[test]
+    fn e05_05_ld_nn_a_wz() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x2000; // nn address already in WZ from data fetch phase
+        cpu.regs.a = 0x99;
+        // LD (nn),A (opcode 0x32). UNKNOWN - to confirm: final WZ needs a post-write hook
+        // (see docs/qa/inbox/E05-05-Q1.md); the hook must keep WZ = nn for the write address.
+        sem(&mut cpu, Table::Main, 0x32, 0);
+        assert_eq!(
+            cpu.regs.wz, 0x2000,
+            "LD (nn),A keeps nn in WZ for the write"
+        );
+        assert_eq!(cpu.eng.tmp_l, 0x99, "LD (nn),A stores A in tmp_l");
+    }
 }

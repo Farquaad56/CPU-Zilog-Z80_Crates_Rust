@@ -78,4 +78,49 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
         // LD r(y),n: immediate value already in tmp_l from data fetch
         set_r8(cpu, y, cpu.eng.tmp_l);
     }
+
+    // LD (BC),A / LD A,(BC) / LD (DE),A / LD A,(DE) / LD (nn),A / LD A,(nn)
+    // All have x=0, z=2; distinguished by y.
+    if x == 0 && z == 2 {
+        match y {
+            // LD (BC),A: store A at address in BC
+            0 => {
+                cpu.eng.tmp_l = cpu.regs.a;
+                let bc_plus1 = cpu.regs.bc().wrapping_add(1);
+                cpu.regs.wz = ((bc_plus1 & 0xFF) as u8 as u16) | ((cpu.regs.a as u16) << 8);
+            }
+            // LD A,(BC): load from address in BC into A
+            1 => {
+                cpu.regs.a = cpu.eng.tmp_l;
+                let bc_plus1 = cpu.regs.bc().wrapping_add(1);
+                cpu.regs.wz = bc_plus1;
+            }
+            // LD (DE),A: store A at address in DE
+            2 => {
+                cpu.eng.tmp_l = cpu.regs.a;
+                let de_plus1 = cpu.regs.de().wrapping_add(1);
+                cpu.regs.wz = ((de_plus1 & 0xFF) as u8 as u16) | ((cpu.regs.a as u16) << 8);
+            }
+            // LD A,(DE): load from address in DE into A
+            3 => {
+                cpu.regs.a = cpu.eng.tmp_l;
+                let de_plus1 = cpu.regs.de().wrapping_add(1);
+                cpu.regs.wz = de_plus1;
+            }
+            // LD (nn),A: store A at absolute address nn
+            // UNKNOWN - to confirm: the plan is X0 W3:NN<L with no hook after the write,
+            // and NN is read from WZ at the write, so WZ must stay nn here. The final
+            // WZ (((nn+1)&0xFF)|(A<<8)) needs a post-write hook. See docs/qa/inbox/E05-05-Q1.md.
+            6 => {
+                cpu.eng.tmp_l = cpu.regs.a;
+            }
+            // LD A,(nn): load from absolute address nn into A
+            7 => {
+                cpu.regs.a = cpu.eng.tmp_l;
+                let nn_plus1 = cpu.regs.wz.wrapping_add(1);
+                cpu.regs.wz = nn_plus1;
+            }
+            _ => {}
+        }
+    }
 }
