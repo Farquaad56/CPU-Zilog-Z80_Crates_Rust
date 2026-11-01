@@ -368,3 +368,55 @@ pub fn daa(a: u8, f: u8) -> (u8, u8) {
 
     (res, flags)
 }
+
+/// NEG: two's complement negate (0 - A).
+pub fn neg(a: u8) -> (u8, u8) {
+    let res = 0u8.wrapping_sub(a);
+    let mut flags = res & 0xA8; // S, Y, X from result
+    if res == 0 {
+        flags |= flag::Z;
+    }
+    flags |= (a ^ res) & flag::H;
+    if a == 0x80 {
+        flags |= flag::PV;
+    }
+    flags |= flag::N;
+    if a != 0 {
+        flags |= flag::C;
+    }
+    (res, flags)
+}
+
+/// BIT y,(HL) or BIT y,r: compute flags for BIT instruction.
+///
+/// v is the value being tested, y is the bit number (0-7), f is the old flags,
+/// xy is the source for Y/X bits (for register BIT it's v itself; for (HL) it's
+/// the high byte of the address).
+pub fn bit_flags(v: u8, y: u8, f: u8, xy: u8) -> u8 {
+    let bit = v & (1 << y);
+    let mut flags = (f & flag::C) | flag::H | (xy & 0x28);
+    if bit == 0 {
+        flags |= flag::Z | flag::PV;
+    }
+    if y == 7 && bit != 0 {
+        flags |= flag::S;
+    }
+    flags
+}
+
+/// Evaluate condition code.
+///
+/// cc: 0=NZ, 1=Z, 2=NC, 3=C, 4=PO, 5=PE, 6=P, 7=M
+pub fn cond(f: u8, cc: u8) -> bool {
+    match cc {
+        0 => (f & flag::Z) == 0,  // NZ
+        1 => (f & flag::Z) != 0,  // Z
+        2 => (f & flag::C) == 0,  // NC
+        3 => (f & flag::C) != 0,  // C
+        4 => (f & flag::PV) == 0, // PO
+        5 => (f & flag::PV) != 0, // PE
+        6 => (f & flag::S) == 0,  // P
+        7 => (f & flag::S) != 0,  // M
+        _ => unreachable!("invalid condition code"),
+    }
+}

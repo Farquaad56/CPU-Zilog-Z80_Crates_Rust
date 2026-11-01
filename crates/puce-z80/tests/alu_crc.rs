@@ -453,3 +453,87 @@ fn e04_07_daa_after_add() {
     assert_eq!(a, 0x10, "daa(0x0A, 0) must produce 0x10");
     assert_eq!(f & 0x10, 0x10, "daa(0x0A, 0) must set H flag");
 }
+
+use puce_z80::alu::{bit_flags, cond, neg};
+
+/// CRC test for neg across all 256 values.
+fn neg_crc() -> (u64, u32) {
+    let mut crc = Crc32::new();
+    let mut count = 0u64;
+    for a in 0u8..=255 {
+        let (r, f) = neg(a);
+        crc.update(r);
+        crc.update(f);
+        count += 1;
+    }
+    (count, crc.finish())
+}
+
+#[test]
+fn e04_08_neg() {
+    let (count, crc) = neg_crc();
+    let (exp_count, exp_crc) = alu_crc("neg");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "neg CRC mismatch");
+}
+
+/// CRC test for bit_flags across all register BIT combinations.
+fn bit_reg_crc() -> (u64, u32) {
+    let mut crc = Crc32::new();
+    let mut count = 0u64;
+    for v in 0u8..=255 {
+        for y in 0u8..=7 {
+            for c in 0u8..=1 {
+                let f = bit_flags(v, y, c, v);
+                crc.update(f);
+                count += 1;
+            }
+        }
+    }
+    (count, crc.finish())
+}
+
+#[test]
+fn e04_08_bit_reg() {
+    let (count, crc) = bit_reg_crc();
+    let (exp_count, exp_crc) = alu_crc("bit_reg");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "bit_reg CRC mismatch");
+}
+
+#[test]
+fn e04_08_cond_table() {
+    // Test all 8 condition codes with f=0x00 and f=0xFF
+    // cc: 0=NZ, 1=Z, 2=NC, 3=C, 4=PO, 5=PE, 6=P, 7=M
+    // f=0x00: Z=0, C=0, PV=0, S=0
+    // f=0xFF: Z=1, C=1, PV=1, S=1
+    assert!(cond(0x00, 0)); // NZ true when Z=0
+    assert!(!cond(0xFF, 0)); // NZ false when Z=1
+    assert!(cond(0xFF, 1)); // Z true when Z=1
+    assert!(!cond(0x00, 1)); // Z false when Z=0
+    assert!(cond(0x00, 2)); // NC true when C=0
+    assert!(!cond(0xFF, 2)); // NC false when C=1
+    assert!(cond(0xFF, 3)); // C true when C=1
+    assert!(!cond(0x00, 3)); // C false when C=0
+    assert!(cond(0x00, 4)); // PO true when PV=0
+    assert!(!cond(0xFF, 4)); // PO false when PV=1
+    assert!(cond(0xFF, 5)); // PE true when PV=1
+    assert!(!cond(0x00, 5)); // PE false when PV=0
+    assert!(cond(0x00, 6)); // P true when S=0
+    assert!(!cond(0xFF, 6)); // P false when S=1
+    assert!(cond(0xFF, 7)); // M true when S=1
+    assert!(!cond(0x00, 7)); // M false when S=0
+}
+
+#[test]
+fn e04_08_bit7_sets_s() {
+    let f = bit_flags(0x80, 7, 0, 0x80);
+    assert_eq!(f & 0x80, 0x80, "BIT 7 on 0x80 must set S flag");
+}
+
+#[test]
+fn e04_08_neg_80() {
+    let (r, f) = neg(0x80);
+    assert_eq!(r, 0x80, "NEG of 0x80 must produce 0x80");
+    assert_eq!(f, 0x87, "NEG of 0x80 must produce flags 0x87");
+}
