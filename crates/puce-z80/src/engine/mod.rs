@@ -51,6 +51,8 @@ pub(crate) struct Engine {
     pub ts_wait: u32,
     /// Current bus address for the active token (set at t0 of each bus cycle).
     pub cur_addr: u16,
+    /// True if the current instruction wrote to F via set_f().
+    pub f_written: bool,
 }
 
 impl Engine {
@@ -78,6 +80,7 @@ impl Engine {
             ts: 0,
             ts_wait: 0,
             cur_addr: 0,
+            f_written: false,
         }
     }
 

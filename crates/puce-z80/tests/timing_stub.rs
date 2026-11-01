@@ -3,6 +3,10 @@
 //! With the semantic stub empty, `cond` stays false, so every instruction must
 //! last exactly `t_min` of its table row. The expected values come from the
 //! TSV files in `docs/specs/data/`.
+//!
+//! Run with: cargo test -p puce-z80 --features stub-sem e03_13
+
+#![cfg(feature = "stub-sem")]
 
 use puce_z80::{Cpu, SimpleRam};
 

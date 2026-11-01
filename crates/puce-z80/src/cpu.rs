@@ -60,6 +60,8 @@ impl Cpu {
             // Reset cond at instruction boundary (spec: eng.cond reset to false)
             self.eng.cond = false;
             self.eng.ddcb = false;
+            // Reset f_written at instruction start
+            self.eng.f_written = false;
         }
 
         // Step 3: Get current token
@@ -197,6 +199,12 @@ impl Cpu {
 
             // If plan complete, mark as inactive (instruction boundary)
             if self.eng.idx >= self.eng.plan.len() {
+                // Q factor: at instruction boundary, copy F to Q if F was written
+                if self.eng.f_written {
+                    self.regs.q = self.regs.f;
+                } else {
+                    self.regs.q = 0;
+                }
                 self.eng.active = false;
             }
         }

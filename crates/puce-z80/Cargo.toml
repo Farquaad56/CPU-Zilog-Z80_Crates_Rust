@@ -16,6 +16,7 @@ default = []
 inspect = []
 disasm = []
 std = []
+stub-sem = []
 
 [dependencies]
 

@@ -31,7 +31,7 @@ pub mod cpu;
 // Bus trait and SimpleRam test implementation.
 pub mod bus;
 // Instruction semantics dispatch (stub, filled by E05+).
-pub(crate) mod sem;
+pub mod sem;
 // Generated opcode decode tables.
 pub(crate) mod tables;
 // Planned modules (enable in the task that implements them):
