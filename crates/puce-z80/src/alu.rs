@@ -183,42 +183,50 @@ pub fn parity(v: u8) -> u8 {
 pub fn rot(y: u8, v: u8, f: u8) -> (u8, u8) {
     let c = f & 1;
     let (res, out_c) = match y {
-        0 => { // RLC: rotate left through carry
+        0 => {
+            // RLC: rotate left through carry
             let oc = (v >> 7) & 1;
-            let r = ((v << 1) | oc) & 0xFF;
+            let r = (v << 1) | oc;
             (r, oc)
         }
-        1 => { // RRC: rotate right through carry
+        1 => {
+            // RRC: rotate right through carry
             let oc = v & 1;
-            let r = (v >> 1) | ((oc << 7) & 0xFF);
+            let r = (v >> 1) | (oc << 7);
             (r, oc)
         }
-        2 => { // RL: rotate left through carry (uses existing carry)
+        2 => {
+            // RL: rotate left through carry (uses existing carry)
             let oc = (v >> 7) & 1;
-            let r = ((v << 1) | c) & 0xFF;
+            let r = (v << 1) | c;
             (r, oc)
         }
-        3 => { // RR: rotate right through carry (uses existing carry)
+        3 => {
+            // RR: rotate right through carry (uses existing carry)
             let oc = v & 1;
-            let r = (v >> 1) | ((c << 7) & 0xFF);
+            let r = (v >> 1) | (c << 7);
             (r, oc)
         }
-        4 => { // SLA: shift left arithmetic
+        4 => {
+            // SLA: shift left arithmetic
             let oc = (v >> 7) & 1;
-            let r = (v << 1) & 0xFF;
+            let r = v << 1;
             (r, oc)
         }
-        5 => { // SRA: shift right arithmetic
+        5 => {
+            // SRA: shift right arithmetic
             let oc = v & 1;
             let r = (v >> 1) | (v & 0x80);
             (r, oc)
         }
-        6 => { // SLL: shift left logical (sets bit 0)
+        6 => {
+            // SLL: shift left logical (sets bit 0)
             let oc = (v >> 7) & 1;
-            let r = ((v << 1) | 1) & 0xFF;
+            let r = (v << 1) | 1;
             (r, oc)
         }
-        7 => { // SRL: shift right logical
+        7 => {
+            // SRL: shift right logical
             let oc = v & 1;
             let r = v >> 1;
             (r, oc)
@@ -233,5 +241,74 @@ pub fn rot(y: u8, v: u8, f: u8) -> (u8, u8) {
     }
     flags |= parity(res);
     flags |= out_c;
+    (res, flags)
+}
+
+/// ADD HL,rr: 16-bit addition.
+///
+/// S, Z, P/V are preserved from the old flags. Y and X come from the high byte
+/// of the result. H is the carry from bit 11. C is the carry from bit 15.
+pub fn add16(a: u16, b: u16, f: u8) -> (u16, u8) {
+    let t = (a as u32) + (b as u32);
+    let res = (t & 0xFFFF) as u16;
+    let mut flags = f & (flag::S | flag::Z | flag::PV);
+    flags |= (res >> 8) as u8 & 0x28; // Y, X from high byte
+    if (((a ^ b ^ res) >> 8) as u8) & flag::H != 0 {
+        flags |= flag::H;
+    }
+    if (t >> 16) != 0 {
+        flags |= flag::C;
+    }
+    (res, flags)
+}
+
+/// ADC HL,rr: 16-bit addition with carry.
+///
+/// All flags are recomputed. H is the carry from bit 11. C is the carry from
+/// bit 15. P/V indicates signed overflow.
+pub fn adc16(a: u16, b: u16, f: u8) -> (u16, u8) {
+    let c = (f & 1) as u32;
+    let t = (a as u32) + (b as u32) + c;
+    let res = (t & 0xFFFF) as u16;
+    let mut flags = (res >> 8) as u8 & 0xA8; // S, Y, X from high byte
+    if res == 0 {
+        flags |= flag::Z;
+    }
+    if (((a ^ b ^ res) >> 8) as u8) & flag::H != 0 {
+        flags |= flag::H;
+    }
+    // P/V: overflow if both inputs have same sign and result differs
+    if (((a ^ res) & !(a ^ b)) & 0x8000) != 0 {
+        flags |= flag::PV;
+    }
+    if (t >> 16) != 0 {
+        flags |= flag::C;
+    }
+    (res, flags)
+}
+
+/// SBC HL,rr: 16-bit subtraction with borrow.
+///
+/// All flags are recomputed. H is the borrow from bit 11. C is the borrow from
+/// bit 15. N is set. P/V indicates signed overflow.
+pub fn sbc16(a: u16, b: u16, f: u8) -> (u16, u8) {
+    let c = (f & 1) as u32;
+    let t = (a as u32).wrapping_sub(b as u32).wrapping_sub(c);
+    let res = (t & 0xFFFF) as u16;
+    let mut flags = (res >> 8) as u8 & 0xA8; // S, Y, X from high byte
+    if res == 0 {
+        flags |= flag::Z;
+    }
+    if (((a ^ b ^ res) >> 8) as u8) & flag::H != 0 {
+        flags |= flag::H;
+    }
+    // P/V: overflow if inputs have different signs and result differs from a
+    if (((a ^ b) & (a ^ res)) & 0x8000) != 0 {
+        flags |= flag::PV;
+    }
+    flags |= flag::N;
+    if (t >> 16) & 1 != 0 {
+        flags |= flag::C;
+    }
     (res, flags)
 }

@@ -6,20 +6,8 @@
 
 mod common;
 
-use common::crc::{Crc32, crc32};
+use common::crc::{crc32, Crc32};
 use common::tsv::alu_crc;
-
-/// Validate a computed CRC and operation count against the reference table.
-fn check(name: &str, bytes_crc: Crc32, count: u64) {
-    let got_crc = bytes_crc.finish();
-    let (exp_count, exp_crc) = alu_crc(name);
-    assert_eq!(count, exp_count, "{}: count mismatch", name);
-    assert_eq!(
-        got_crc, exp_crc,
-        "{}: crc mismatch (expected {:08x}, got {:08x})",
-        name, exp_crc, got_crc
-    );
-}
 
 #[test]
 fn e04_01_crc_known_vector() {
@@ -60,7 +48,7 @@ fn e04_01_tsv_missing_panics() {
     alu_crc("nope");
 }
 
-use puce_z80::alu::{alu8, inc8, dec8};
+use puce_z80::alu::{alu8, dec8, inc8};
 
 /// Run ALU operation across all inputs and compute CRC of outputs.
 fn alu8_crc(op: u8) -> (u64, u32) {
@@ -323,4 +311,113 @@ fn e04_05_rot_srl() {
 fn e04_05_sll_sets_bit0() {
     let (r, _) = rot(6, 0x00, 0);
     assert_eq!(r, 0x01, "SLL of 0 must set bit 0");
+}
+
+use puce_z80::alu::{adc16, add16, sbc16};
+
+/// CRC test for add16 across sampled inputs and flag states.
+fn add16_crc() -> (u64, u32) {
+    let mut crc = Crc32::new();
+    let mut count = 0u64;
+    let mut a = 0u32;
+    while a < 65536 {
+        let mut b = 0u32;
+        while b < 65536 {
+            for &f in &[0x00u8, 0xFFu8] {
+                let (r, f2) = add16(a as u16, b as u16, f);
+                crc.update(r as u8);
+                crc.update((r >> 8) as u8);
+                crc.update(f2);
+                count += 1;
+            }
+            b += 263;
+        }
+        a += 257;
+    }
+    (count, crc.finish())
+}
+
+/// CRC test for adc16 across sampled inputs and flag states.
+fn adc16_crc() -> (u64, u32) {
+    let mut crc = Crc32::new();
+    let mut count = 0u64;
+    let mut a = 0u32;
+    while a < 65536 {
+        let mut b = 0u32;
+        while b < 65536 {
+            for &f in &[0x00u8, 0x01u8] {
+                let (r, f2) = adc16(a as u16, b as u16, f);
+                crc.update(r as u8);
+                crc.update((r >> 8) as u8);
+                crc.update(f2);
+                count += 1;
+            }
+            b += 263;
+        }
+        a += 257;
+    }
+    (count, crc.finish())
+}
+
+/// CRC test for sbc16 across sampled inputs and flag states.
+fn sbc16_crc() -> (u64, u32) {
+    let mut crc = Crc32::new();
+    let mut count = 0u64;
+    let mut a = 0u32;
+    while a < 65536 {
+        let mut b = 0u32;
+        while b < 65536 {
+            for &f in &[0x00u8, 0x01u8] {
+                let (r, f2) = sbc16(a as u16, b as u16, f);
+                crc.update(r as u8);
+                crc.update((r >> 8) as u8);
+                crc.update(f2);
+                count += 1;
+            }
+            b += 263;
+        }
+        a += 257;
+    }
+    (count, crc.finish())
+}
+
+#[test]
+fn e04_06_add16() {
+    let (count, crc) = add16_crc();
+    let (exp_count, exp_crc) = alu_crc("add16");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "add16 CRC mismatch");
+}
+
+#[test]
+fn e04_06_adc16() {
+    let (count, crc) = adc16_crc();
+    let (exp_count, exp_crc) = alu_crc("adc16");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "adc16 CRC mismatch");
+}
+
+#[test]
+fn e04_06_sbc16() {
+    let (count, crc) = sbc16_crc();
+    let (exp_count, exp_crc) = alu_crc("sbc16");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "sbc16 CRC mismatch");
+}
+
+#[test]
+fn e04_06_add16_keeps_szpv() {
+    // add16 must preserve S, Z, P/V from the old flags
+    let (_, f) = add16(0x0001, 0x0002, 0x84); // S=1, P/V=1, others 0
+    assert_eq!(f & 0x84, 0x84, "add16 must preserve S and P/V");
+    let (_, f2) = add16(0x0001, 0x0002, 0x40); // Z=1
+    assert_eq!(f2 & 0x40, 0x40, "add16 must preserve Z");
+}
+
+#[test]
+fn e04_06_sbc16_zero() {
+    let (r, f) = sbc16(0x1234, 0x1234, 0);
+    assert_eq!(r, 0, "sbc16(0x1234, 0x1234, 0) must produce 0");
+    assert_eq!(f & 0x40, 0x40, "sbc16 equal values must set Z");
+    assert_eq!(f & 0x02, 0x02, "sbc16 must set N");
 }
