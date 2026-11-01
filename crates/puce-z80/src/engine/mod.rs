@@ -53,6 +53,8 @@ pub(crate) struct Engine {
     pub cur_addr: u16,
     /// True if the current instruction wrote to F via set_f().
     pub f_written: bool,
+    /// EI delay flag: true after EI until next instruction completes (E09).
+    pub ei_delay: bool,
 }
 
 impl Engine {
@@ -81,6 +83,7 @@ impl Engine {
             ts_wait: 0,
             cur_addr: 0,
             f_written: false,
+            ei_delay: false,
         }
     }
 
