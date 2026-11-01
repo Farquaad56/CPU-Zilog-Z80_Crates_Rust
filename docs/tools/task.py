@@ -18,6 +18,7 @@ Python 3.8+, standard library only.  Works on Windows, Linux, macOS.
 import argparse
 import fnmatch
 import json
+import os
 import re
 import subprocess
 import sys
@@ -265,7 +266,16 @@ def run_acceptance(tid):
     for c in cmds:
         print("$ " + c)
         sys.stdout.flush()
-        r = subprocess.run(c, shell=True, cwd=str(ROOT))
+        # Leading VAR=value assignments (bash syntax) work on every platform.
+        env = dict(os.environ)
+        cmd = c
+        while True:
+            m = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_]*)=(\S*)\s+(.*)$", cmd)
+            if not m:
+                break
+            env[m.group(1)] = m.group(2)
+            cmd = m.group(3)
+        r = subprocess.run(cmd, shell=True, cwd=str(ROOT), env=env)
         if r.returncode != 0:
             print("ACCEPTANCE FAIL (exit %d): %s" % (r.returncode, c))
             return False
