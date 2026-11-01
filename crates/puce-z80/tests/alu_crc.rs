@@ -237,3 +237,90 @@ fn e04_04_carry_kept() {
     let (_, f) = inc8(0xFF, 1);
     assert_eq!(f & 0x01, 0x01, "inc8 must preserve carry flag");
 }
+
+use puce_z80::alu::rot;
+
+/// CRC test for rotation/shift operations across all values and carry states.
+fn rot_crc(op: u8) -> (u64, u32) {
+    let mut crc = Crc32::new();
+    let mut count = 0u64;
+    for v in 0u8..=255 {
+        for c in 0u8..=1 {
+            let (r, f) = rot(op, v, c);
+            crc.update(r);
+            crc.update(f);
+            count += 1;
+        }
+    }
+    (count, crc.finish())
+}
+
+#[test]
+fn e04_05_rot_rlc() {
+    let (count, crc) = rot_crc(0);
+    let (exp_count, exp_crc) = alu_crc("rot_rlc");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "RLC CRC mismatch");
+}
+
+#[test]
+fn e04_05_rot_rrc() {
+    let (count, crc) = rot_crc(1);
+    let (exp_count, exp_crc) = alu_crc("rot_rrc");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "RRC CRC mismatch");
+}
+
+#[test]
+fn e04_05_rot_rl() {
+    let (count, crc) = rot_crc(2);
+    let (exp_count, exp_crc) = alu_crc("rot_rl");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "RL CRC mismatch");
+}
+
+#[test]
+fn e04_05_rot_rr() {
+    let (count, crc) = rot_crc(3);
+    let (exp_count, exp_crc) = alu_crc("rot_rr");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "RR CRC mismatch");
+}
+
+#[test]
+fn e04_05_rot_sla() {
+    let (count, crc) = rot_crc(4);
+    let (exp_count, exp_crc) = alu_crc("rot_sla");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "SLA CRC mismatch");
+}
+
+#[test]
+fn e04_05_rot_sra() {
+    let (count, crc) = rot_crc(5);
+    let (exp_count, exp_crc) = alu_crc("rot_sra");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "SRA CRC mismatch");
+}
+
+#[test]
+fn e04_05_rot_sll() {
+    let (count, crc) = rot_crc(6);
+    let (exp_count, exp_crc) = alu_crc("rot_sll");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "SLL CRC mismatch");
+}
+
+#[test]
+fn e04_05_rot_srl() {
+    let (count, crc) = rot_crc(7);
+    let (exp_count, exp_crc) = alu_crc("rot_srl");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "SRL CRC mismatch");
+}
+
+#[test]
+fn e04_05_sll_sets_bit0() {
+    let (r, _) = rot(6, 0x00, 0);
+    assert_eq!(r, 0x01, "SLL of 0 must set bit 0");
+}

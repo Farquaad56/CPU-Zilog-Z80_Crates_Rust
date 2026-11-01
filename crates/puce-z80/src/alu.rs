@@ -173,3 +173,65 @@ pub fn parity(v: u8) -> u8 {
         0
     }
 }
+
+/// Rotation and shift operations (CB prefix).
+///
+/// y: 0=RLC, 1=RRC, 2=RL, 3=RR, 4=SLA, 5=SRA, 6=SLL, 7=SRL
+/// v: value to rotate/shift
+/// f: current flags (only bit 0 = carry matters for RL/RR)
+/// Returns (result, flags).
+pub fn rot(y: u8, v: u8, f: u8) -> (u8, u8) {
+    let c = f & 1;
+    let (res, out_c) = match y {
+        0 => { // RLC: rotate left through carry
+            let oc = (v >> 7) & 1;
+            let r = ((v << 1) | oc) & 0xFF;
+            (r, oc)
+        }
+        1 => { // RRC: rotate right through carry
+            let oc = v & 1;
+            let r = (v >> 1) | ((oc << 7) & 0xFF);
+            (r, oc)
+        }
+        2 => { // RL: rotate left through carry (uses existing carry)
+            let oc = (v >> 7) & 1;
+            let r = ((v << 1) | c) & 0xFF;
+            (r, oc)
+        }
+        3 => { // RR: rotate right through carry (uses existing carry)
+            let oc = v & 1;
+            let r = (v >> 1) | ((c << 7) & 0xFF);
+            (r, oc)
+        }
+        4 => { // SLA: shift left arithmetic
+            let oc = (v >> 7) & 1;
+            let r = (v << 1) & 0xFF;
+            (r, oc)
+        }
+        5 => { // SRA: shift right arithmetic
+            let oc = v & 1;
+            let r = (v >> 1) | (v & 0x80);
+            (r, oc)
+        }
+        6 => { // SLL: shift left logical (sets bit 0)
+            let oc = (v >> 7) & 1;
+            let r = ((v << 1) | 1) & 0xFF;
+            (r, oc)
+        }
+        7 => { // SRL: shift right logical
+            let oc = v & 1;
+            let r = v >> 1;
+            (r, oc)
+        }
+        _ => unreachable!("invalid rot op"),
+    };
+
+    // Flags: S,Y,X from result; Z if result is 0; H=N=0; P/V=parity of result; C=out_c
+    let mut flags = res & 0xA8;
+    if res == 0 {
+        flags |= flag::Z;
+    }
+    flags |= parity(res);
+    flags |= out_c;
+    (res, flags)
+}
