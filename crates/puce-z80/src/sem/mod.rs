@@ -171,6 +171,103 @@ mod tests {
     }
 
     #[test]
+    fn e05_03_di_ei() {
+        let mut cpu = Cpu::new();
+        // DI: clear IFF1 and IFF2
+        sem(&mut cpu, Table::Main, 0xF3, 0);
+        assert!(!cpu.regs.iff1, "DI clears IFF1");
+        assert!(!cpu.regs.iff2, "DI clears IFF2");
+
+        // EI: set IFF1 and IFF2, arm ei_delay
+        sem(&mut cpu, Table::Main, 0xFB, 0);
+        assert!(cpu.regs.iff1, "EI sets IFF1");
+        assert!(cpu.regs.iff2, "EI sets IFF2");
+        assert!(cpu.eng.ei_delay, "EI arms ei_delay");
+    }
+
+    #[test]
+    fn e05_03_halt_pc() {
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 100;
+        sem(&mut cpu, Table::Main, 0x76, 0);
+        assert!(cpu.regs.halted, "HALT sets halted flag");
+        assert_eq!(cpu.regs.pc, 99, "HALT decrements PC (stays on opcode)");
+    }
+
+    #[test]
+    fn e05_03_exx() {
+        let mut cpu = Cpu::new();
+        // Set up main and alternate register pairs with different values
+        cpu.regs.set_bc(0x1122);
+        cpu.regs.set_de(0x3344);
+        cpu.regs.set_hl(0x5566);
+        cpu.regs.set_bc2(0xAABB);
+        cpu.regs.set_de2(0xCCDD);
+        cpu.regs.set_hl2(0xEEFF);
+
+        sem(&mut cpu, Table::Main, 0xD9, 0);
+
+        // After EXX: main pairs should have alternate values and vice versa
+        assert_eq!(cpu.regs.bc(), 0xAABB, "EXX swaps BC");
+        assert_eq!(cpu.regs.de(), 0xCCDD, "EXX swaps DE");
+        assert_eq!(cpu.regs.hl(), 0xEEFF, "EXX swaps HL");
+        assert_eq!(cpu.regs.bc2(), 0x1122, "EXX swaps BC'");
+        assert_eq!(cpu.regs.de2(), 0x3344, "EXX swaps DE'");
+        assert_eq!(cpu.regs.hl2(), 0x5566, "EXX swaps HL'");
+    }
+
+    #[test]
+    fn e05_03_ex_af() {
+        let mut cpu = Cpu::new();
+        // Set up AF and AF' with different values
+        cpu.regs.a = 0x12;
+        cpu.regs.f = 0x34;
+        cpu.regs.a2 = 0xAB;
+        cpu.regs.f2 = 0xCD;
+
+        sem(&mut cpu, Table::Main, 0x08, 0);
+
+        // After EX AF,AF': values should be swapped
+        assert_eq!(cpu.regs.a, 0xAB, "EX AF swaps A");
+        assert_eq!(cpu.regs.f, 0xCD, "EX AF swaps F");
+        assert_eq!(cpu.regs.a2, 0x12, "EX AF swaps A'");
+        assert_eq!(cpu.regs.f2, 0x34, "EX AF swaps F'");
+    }
+
+    #[test]
+    fn e05_03_ex_de_hl() {
+        let mut cpu = Cpu::new();
+        // Set up DE and HL with different values
+        cpu.regs.set_de(0x1234);
+        cpu.regs.set_hl(0x5678);
+
+        sem(&mut cpu, Table::Main, 0xEB, 0);
+
+        // After EX DE,HL: values should be swapped
+        assert_eq!(cpu.regs.de(), 0x5678, "EX DE,HL swaps to DE");
+        assert_eq!(cpu.regs.hl(), 0x1234, "EX DE,HL swaps to HL");
+    }
+
+    #[test]
+    fn e05_03_nop_no_effect() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0xAA;
+        cpu.regs.b = 0xBB;
+        cpu.regs.f = 0xCC;
+        cpu.regs.iff1 = true;
+        cpu.regs.halted = true;
+
+        sem(&mut cpu, Table::Main, 0x00, 0);
+
+        // NOP should not change any state
+        assert_eq!(cpu.regs.a, 0xAA, "NOP preserves A");
+        assert_eq!(cpu.regs.b, 0xBB, "NOP preserves B");
+        assert_eq!(cpu.regs.f, 0xCC, "NOP preserves F");
+        assert!(cpu.regs.iff1, "NOP preserves IFF1");
+        assert!(cpu.regs.halted, "NOP preserves halted");
+    }
+
+    #[test]
     fn e05_02_dispatch_main_noop() {
         let mut cpu = Cpu::new();
         cpu.regs.a = 0xAA;
