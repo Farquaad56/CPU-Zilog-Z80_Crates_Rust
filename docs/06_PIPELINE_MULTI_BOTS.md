@@ -23,7 +23,7 @@ Le relecteur travaille dans le depot (lecture seule) et verifie, dans cet ordre:
 2. Perimetre: `python docs/tools/task.py scope <id>` ne doit lister aucun fichier hors "Write only in" (`git status --short` pour voir les changements).
 3. Tests: chaque test nomme dans la fiche existe (`rg "fn <nom>"`) et les commandes de "Acceptance" passent. Lance-les.
 4. Regles permanentes: anglais ASCII, pas de f32/f64, pas d'unsafe, pas de dependance, aucun `UNKNOWN - to confirm` supprime ou devine, aucune valeur inventee (comparer aux specs citees).
-5. Qualite: `cargo fmt --all -- --check` et `cargo clippy --workspace --all-targets -- -D warnings` propres.
+5. Qualite: lance `powershell -NoProfile -ExecutionPolicy Bypass -File tools\ci.ps1` en entier (fmt, clippy -D warnings, tous les tests du workspace, y compris ceux des taches precedentes). Il doit finir par `all checks passed`. Toute erreur, meme un lint ou un test ancien casse, = `kanban_request_changes` (jamais `kanban_complete`).
 6. Verdict. Tout OK: `kanban_complete(summary="conforme: <3 points verifies>")`. Sinon `kanban_request_changes` avec la liste PRECISE (fichier, ligne, regle violee). Ne corrige jamais toi-meme.
 
 ## Mise en place
