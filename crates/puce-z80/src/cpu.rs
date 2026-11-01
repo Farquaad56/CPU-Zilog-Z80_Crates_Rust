@@ -115,6 +115,19 @@ impl Cpu {
             }
         }
 
+        // WAIT state insertion: at sampling points, if WAIT pin is active,
+        // insert a wait T-state (don't advance t, increment ts_wait).
+        let sampling = match cur.kind {
+            Kind::F | Kind::R | Kind::W => self.eng.t == 1,
+            Kind::N | Kind::O => self.eng.t == 2,
+            _ => false, // I and X don't sample WAIT
+        };
+
+        if sampling && pins.has(Pins::WAIT) {
+            self.eng.ts_wait += 1;
+            return out; // Repeat same outputs on next tick at same t
+        }
+
         // Increment t and ts counter
         self.eng.t += 1;
         self.eng.ts += 1;
@@ -145,6 +158,16 @@ impl Cpu {
         }
 
         out
+    }
+
+    /// Total WAIT T-states inserted during the current (or last completed) instruction.
+    pub fn wait_states(&self) -> u32 {
+        self.eng.ts_wait
+    }
+
+    /// T-states of the current (or last completed) instruction, excluding WAIT states.
+    pub fn instruction_tstates(&self) -> u32 {
+        self.eng.ts
     }
 }
 
@@ -554,5 +577,148 @@ mod tests {
         }
         assert!(cpu2.at_instruction_boundary());
         assert_eq!(cpu2.eng.ts, 13);
+    }
+
+    // E03-09: WAIT state insertion tests
+
+    #[test]
+    fn e03_09_wait_extends_read() {
+        use crate::engine::plan::{Addr, Kind, Reg};
+        let plan = Box::leak(Box::new([Tok::new(Kind::R, 3, Addr::Hl, Reg::L, false)]));
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1234);
+        cpu.start_plan(plan);
+
+        // Tick 1 (t=0): address on bus, no WAIT sampling
+        let out1 = cpu.tick(Pins(0));
+        assert_eq!(out1.addr(), 0x1234);
+
+        // Tick 2 (t=1): MREQ|RD active, WAIT sampled here - apply WAIT for 2 ticks
+        let out2 = cpu.tick(Pins(Pins::WAIT));
+        assert!(out2.has(Pins::MREQ | Pins::RD));
+        assert_eq!(cpu.wait_states(), 1);
+
+        // Tick 3 (t=1 still): WAIT still active, another wait state inserted
+        let out3 = cpu.tick(Pins(Pins::WAIT));
+        assert!(out3.has(Pins::MREQ | Pins::RD));
+        assert_eq!(cpu.wait_states(), 2);
+
+        // Tick 4 (t=1 now advances): WAIT released, normal progression resumes
+        let out4 = cpu.tick(Pins(0));
+        assert!(out4.has(Pins::MREQ | Pins::RD));
+
+        // Tick 5 (t=2): data latched, instruction complete
+        let in_data = Pins(0).set_data(0xAB);
+        let _out5 = cpu.tick(in_data);
+        assert_eq!(cpu.eng.tmp_l, 0xAB);
+        assert!(cpu.at_instruction_boundary());
+
+        // Total: 3 normal T-states + 2 wait states = 5 ticks
+        assert_eq!(cpu.wait_states(), 2);
+    }
+
+    #[test]
+    fn e03_09_wait_not_in_internal() {
+        use crate::engine::plan::{Addr, Kind, Reg};
+        let plan = Box::leak(Box::new([Tok::new(Kind::I, 4, Addr::None, Reg::None, false)]));
+        let mut cpu = Cpu::new();
+        cpu.start_plan(plan);
+
+        // Internal cycle: WAIT pin is ignored for all 4 ticks
+        for _ in 0..3 {
+            let out = cpu.tick(Pins(Pins::WAIT));
+            assert!(!out.has(Pins::MREQ | Pins::IORQ | Pins::RD | Pins::WR));
+        }
+        let _out4 = cpu.tick(Pins(0));
+        assert!(cpu.at_instruction_boundary());
+
+        // No wait states inserted for internal cycle
+        assert_eq!(cpu.wait_states(), 0);
+    }
+
+    #[test]
+    fn e03_09_wait_io() {
+        use crate::engine::plan::{Addr, Kind, Reg};
+        let plan = Box::leak(Box::new([Tok::new(Kind::N, 4, Addr::An, Reg::L, false)]));
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x12;
+        cpu.eng.tmp_l = 0x34;
+        cpu.start_plan(plan);
+
+        // Tick 1 (t=0): port address on bus
+        let out1 = cpu.tick(Pins(0));
+        assert_eq!(out1.addr(), 0x1234);
+
+        // Tick 2 (t=1): still just address, no WAIT sampling for N at t=1
+        let out2 = cpu.tick(Pins(Pins::WAIT));
+        assert!(!out2.has(Pins::IORQ | Pins::RD));
+
+        // Tick 3 (t=2): IORQ|RD active (+TW auto), WAIT sampled here -> wait state inserted
+        let out3 = cpu.tick(Pins(Pins::WAIT));
+        assert!(out3.has(Pins::IORQ | Pins::RD));
+        assert_eq!(cpu.wait_states(), 1);
+
+        // Tick 4 (t=2 still): WAIT released, advance to t=3
+        let _out4 = cpu.tick(Pins(0));
+
+        // Tick 5 (t=3): data latched here, then advance to t=4 -> instruction complete
+        let in_data = Pins(0).set_data(0x99);
+        let _out5 = cpu.tick(in_data);
+        assert_eq!(cpu.eng.tmp_l, 0x99);
+        assert!(cpu.at_instruction_boundary());
+
+        assert_eq!(cpu.wait_states(), 1);
+    }
+
+    #[test]
+    fn e03_09_outputs_repeat() {
+        use crate::engine::plan::{Addr, Kind, Reg};
+        let plan = Box::leak(Box::new([Tok::new(Kind::R, 3, Addr::Hl, Reg::L, false)]));
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1234);
+        cpu.start_plan(plan);
+
+        // Tick 1 (t=0): address on bus
+        let out1 = cpu.tick(Pins(0));
+        assert_eq!(out1.addr(), 0x1234);
+
+        // Tick 2 (t=1): MREQ|RD active - capture this output
+        let out_normal = cpu.tick(Pins(Pins::WAIT));
+        assert!(out_normal.has(Pins::MREQ | Pins::RD));
+        assert_eq!(out_normal.addr(), 0x1234);
+
+        // Tick 3 (t=1 still): WAIT active, outputs must be identical to tick 2
+        let out_wait = cpu.tick(Pins(Pins::WAIT));
+        assert_eq!(out_wait.0, out_normal.0); // Exact same pin values
+        assert!(out_wait.has(Pins::MREQ | Pins::RD));
+        assert_eq!(out_wait.addr(), 0x1234);
+
+        // Release WAIT and complete instruction
+        cpu.tick(Pins(0));
+        let in_data = Pins(0).set_data(0xAB);
+        cpu.tick(in_data);
+    }
+
+    #[test]
+    fn e03_09_no_wait_total() {
+        use crate::engine::plan::{Addr, Kind, Reg};
+        let plan = Box::leak(Box::new([Tok::new(Kind::R, 3, Addr::Hl, Reg::L, false)]));
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1234);
+        cpu.start_plan(plan);
+
+        // Tick through with WAIT inserted at t=1 for 2 ticks
+        cpu.tick(Pins(0));           // t=0
+        cpu.tick(Pins(Pins::WAIT));        // t=1, wait state 1
+        cpu.tick(Pins(Pins::WAIT));        // t=1, wait state 2
+        cpu.tick(Pins(0));           // t=1 advances to t=2
+        let in_data = Pins(0).set_data(0xAB);
+        cpu.tick(in_data);           // t=2 completes instruction
+
+        assert!(cpu.at_instruction_boundary());
+        // instruction_tstates excludes wait states: should be 3 (the R3 token length)
+        assert_eq!(cpu.instruction_tstates(), 3);
+        // wait_states counts only the inserted waits
+        assert_eq!(cpu.wait_states(), 2);
     }
 }
