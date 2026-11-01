@@ -105,6 +105,12 @@ impl SimpleRam {
     }
 }
 
+impl Default for SimpleRam {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Bus for SimpleRam {
     fn read(&mut self, addr: u16) -> u8 {
         self.mem[addr as usize]
