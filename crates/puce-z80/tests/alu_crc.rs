@@ -59,3 +59,79 @@ fn e04_01_alu_crc_lookup() {
 fn e04_01_tsv_missing_panics() {
     alu_crc("nope");
 }
+
+use puce_z80::alu::alu8;
+
+/// Run ALU operation across all inputs and compute CRC of outputs.
+fn alu8_crc(op: u8) -> (u64, u32) {
+    let mut crc = Crc32::new();
+    let mut count = 0u64;
+    for a in 0u8..=255 {
+        for b in 0u8..=255 {
+            for c in 0u8..=1 {
+                let (a_out, f_out) = alu8(op, a, b, c);
+                crc.update(a_out);
+                crc.update(f_out);
+                count += 1;
+            }
+        }
+    }
+    (count, crc.finish())
+}
+
+#[test]
+fn e04_02_alu8_add() {
+    let (count, crc) = alu8_crc(0);
+    let (exp_count, exp_crc) = alu_crc("alu8_add");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "ADD CRC mismatch");
+}
+
+#[test]
+fn e04_02_alu8_adc() {
+    let (count, crc) = alu8_crc(1);
+    let (exp_count, exp_crc) = alu_crc("alu8_adc");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "ADC CRC mismatch");
+}
+
+#[test]
+fn e04_02_alu8_sub() {
+    let (count, crc) = alu8_crc(2);
+    let (exp_count, exp_crc) = alu_crc("alu8_sub");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "SUB CRC mismatch");
+}
+
+#[test]
+fn e04_02_alu8_sbc() {
+    let (count, crc) = alu8_crc(3);
+    let (exp_count, exp_crc) = alu_crc("alu8_sbc");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "SBC CRC mismatch");
+}
+
+#[test]
+fn e04_02_alu8_cp() {
+    let (count, crc) = alu8_crc(7);
+    let (exp_count, exp_crc) = alu_crc("alu8_cp");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "CP CRC mismatch");
+}
+
+#[test]
+fn e04_02_parity_table() {
+    use puce_z80::alu::parity;
+    assert_eq!(parity(0), 4);
+    assert_eq!(parity(1), 0);
+    assert_eq!(parity(3), 4);
+    assert_eq!(parity(0xFF), 4);
+    assert_eq!(parity(0x7F), 0);
+}
+
+#[test]
+fn e04_02_add_example() {
+    let (a, f) = alu8(0, 0x7F, 1, 0);
+    assert_eq!(a, 0x80);
+    assert_eq!(f, 0x94);
+}

@@ -37,7 +37,7 @@ pub(crate) mod tables;
 // Planned modules (enable in the task that implements them):
 // pub mod bus;     Bus trait and SimpleRam test implementation
 // pub mod cpu;     Cpu struct: new/reset/tick/step/at_instruction_boundary
-// pub mod alu;     Pure ALU flag functions
+pub mod alu;
 // pub mod sem;     Instruction semantics dispatch
 // pub mod int;     NMI, INT, HALT, RESET handling
 
