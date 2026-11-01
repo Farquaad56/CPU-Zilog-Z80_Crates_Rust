@@ -1,14 +1,24 @@
 //! CPU top-level struct and tick interface.
 
 use crate::engine::addr::resolve;
-use crate::engine::decode::Table;
-#[cfg(test)]
-use crate::engine::plan::Tok;
-use crate::engine::plan::{Kind, FETCH_PROBE};
+use crate::engine::decode::{decode, plan_of, Decoded, Prefix, Table};
+use crate::engine::mcycle::fetch_pins;
+use crate::engine::plan::{Addr, Kind, Reg, Tok, FETCH_PROBE};
 use crate::engine::Engine;
 use crate::pins::Pins;
 use crate::regs::Regs;
 use crate::sem::sem;
+
+/// Two chained M1 probes: the M1 in progress plus the next one (after a prefix byte).
+static PROBES: [Tok; 2] = [FETCH_PROBE, FETCH_PROBE];
+
+/// Common head of `DD CB d op` / `FD CB d op`: two M1 cycles, then `d` and `op` read as data.
+static DDCB_HEAD: [Tok; 4] = [
+    Tok::new(Kind::F, 4, Addr::PcInc, Reg::None, false),
+    Tok::new(Kind::F, 4, Addr::PcInc, Reg::None, false),
+    Tok::new(Kind::R, 3, Addr::PcInc, Reg::D, false),
+    Tok::new(Kind::R, 5, Addr::PcInc, Reg::Op, false),
+];
 
 /// The Z80 CPU state: registers plus execution engine.
 pub struct Cpu {
@@ -42,21 +52,28 @@ impl Cpu {
             self.eng.table = Table::Main;
             self.eng.prefix = crate::engine::decode::Prefix::None;
             self.eng.fetches = 0;
-            self.eng.plan = &[FETCH_PROBE];
+            self.eng.plan = &PROBES[..1];
             self.eng.idx = 0;
             self.eng.t = 0;
             self.eng.active = true;
             // Reset cond at instruction boundary (spec: eng.cond reset to false)
             self.eng.cond = false;
+            self.eng.ddcb = false;
         }
 
         // Step 3: Get current token
-        let cur = self.eng.plan[self.eng.idx];
+        let mut cur = self.eng.plan[self.eng.idx];
 
         // At t0 of bus tokens, resolve address and store in cur_addr
         if self.eng.t == 0 && cur.is_bus() {
             let port = matches!(cur.kind, Kind::N | Kind::O);
-            self.eng.cur_addr = resolve(self, cur.addr, port);
+            // An M1 cycle always fetches from PC (table F tokens may carry Addr::None).
+            let a = if cur.kind == Kind::F {
+                Addr::PcInc
+            } else {
+                cur.addr
+            };
+            self.eng.cur_addr = resolve(self, a, port);
         }
 
         // Step 4: Calculate pins_out for (cur, t)
@@ -64,8 +81,26 @@ impl Cpu {
 
         match cur.kind {
             Kind::F => {
-                // M1 cycle - but decoding not implemented yet (E03-09), treat like I
-                // Just output address, no control signals for now
+                // R is incremented (7 bits, bit 7 kept) at the first T of every M1.
+                if self.eng.t == 0 {
+                    let r = self.regs.r;
+                    self.regs.r = (r & 0x80) | (r.wrapping_add(1) & 0x7F);
+                }
+                out = fetch_pins(
+                    self.eng.cur_addr,
+                    self.regs.i,
+                    self.regs.r,
+                    self.eng.t,
+                    cur.len,
+                    false,
+                );
+                // Opcode latched at T3: decode and possibly replace the current token.
+                if self.eng.t == 2 {
+                    let byte = pins.data();
+                    self.eng.latched = byte;
+                    self.decode_m1(byte);
+                    cur = self.eng.plan[self.eng.idx];
+                }
             }
             Kind::R => {
                 // Memory read: t0=A, t1=A+MREQ+RD, t2=A (data latched)
@@ -134,6 +169,14 @@ impl Cpu {
 
         // Step 5: If token complete, advance to next
         if self.eng.t == cur.len {
+            if self.eng.ddcb && cur.kind == Kind::R && cur.reg == Reg::Op {
+                // End of `DD CB d op`: the operation byte selects the real plan.
+                self.eng.table = Table::DdCb;
+                self.eng.op = self.eng.opb;
+                self.eng.plan = plan_of(Table::DdCb, self.eng.opb);
+                self.eng.ddcb = false;
+                self.eng.idx = 3;
+            }
             self.eng.idx += 1;
             self.eng.t = 0;
 
@@ -158,6 +201,59 @@ impl Cpu {
         }
 
         out
+    }
+
+    /// Apply the decode reaction for the opcode byte latched at T3 of an M1 cycle.
+    fn decode_m1(&mut self, byte: u8) {
+        match decode(self.eng.table, byte) {
+            Decoded::Plan(tbl, plan) => {
+                // The M1 in progress becomes plan[fetches] (F4, F5 or F6).
+                self.eng.table = tbl;
+                self.eng.plan = plan;
+                self.eng.op = byte;
+                self.eng.idx = self.eng.fetches as usize;
+                self.eng.fetches += 1;
+            }
+            Decoded::Prefix(tbl) => {
+                self.eng.table = tbl;
+                if byte == 0xDD {
+                    self.eng.prefix = Prefix::Dd;
+                } else if byte == 0xFD {
+                    self.eng.prefix = Prefix::Fd;
+                }
+                self.eng.fetches += 1;
+                self.eng.plan = &PROBES;
+                self.eng.idx = 0;
+            }
+            Decoded::IndexCb => {
+                self.eng.ddcb = true;
+                self.eng.fetches += 1;
+                self.eng.plan = &DDCB_HEAD;
+                self.eng.idx = 1;
+            }
+            Decoded::Restart(b) => {
+                // The previous prefix is consumed without effect (its M1 already cost
+                // 4 T). The byte just fetched is the new first prefix M1 of the plan.
+                match b {
+                    0xDD => {
+                        self.eng.prefix = Prefix::Dd;
+                        self.eng.table = Table::DdFd;
+                    }
+                    0xFD => {
+                        self.eng.prefix = Prefix::Fd;
+                        self.eng.table = Table::DdFd;
+                    }
+                    _ => {
+                        self.eng.prefix = Prefix::None;
+                        self.eng.table = Table::Ed;
+                    }
+                }
+                self.eng.restart_cost += 4;
+                self.eng.fetches = 1;
+                self.eng.plan = &PROBES;
+                self.eng.idx = 0;
+            }
+        }
     }
 
     /// Total WAIT T-states inserted during the current (or last completed) instruction.
@@ -544,7 +640,7 @@ mod tests {
         // DJNZ shape: F5 R3 X0 ?I5 X1 (simplified for test)
         // Without cond: 5+3 = 8 ticks (skip I5 and hook contributes 0)
         let plan = Box::leak(Box::new([
-            Tok::new(Kind::F, 5, Addr::PcInc, Reg::None, false),
+            Tok::new(Kind::I, 5, Addr::None, Reg::None, false),
             Tok::new(Kind::R, 3, Addr::Hl, Reg::L, false),
             Tok::new(Kind::X, 0, Addr::None, Reg::None, false), // hook X0 (sets cond)
             Tok::new(Kind::I, 5, Addr::None, Reg::None, true),  // conditional I5
@@ -620,7 +716,13 @@ mod tests {
     #[test]
     fn e03_09_wait_not_in_internal() {
         use crate::engine::plan::{Addr, Kind, Reg};
-        let plan = Box::leak(Box::new([Tok::new(Kind::I, 4, Addr::None, Reg::None, false)]));
+        let plan = Box::leak(Box::new([Tok::new(
+            Kind::I,
+            4,
+            Addr::None,
+            Reg::None,
+            false,
+        )]));
         let mut cpu = Cpu::new();
         cpu.start_plan(plan);
 
@@ -708,17 +810,135 @@ mod tests {
         cpu.start_plan(plan);
 
         // Tick through with WAIT inserted at t=1 for 2 ticks
-        cpu.tick(Pins(0));           // t=0
-        cpu.tick(Pins(Pins::WAIT));        // t=1, wait state 1
-        cpu.tick(Pins(Pins::WAIT));        // t=1, wait state 2
-        cpu.tick(Pins(0));           // t=1 advances to t=2
+        cpu.tick(Pins(0)); // t=0
+        cpu.tick(Pins(Pins::WAIT)); // t=1, wait state 1
+        cpu.tick(Pins(Pins::WAIT)); // t=1, wait state 2
+        cpu.tick(Pins(0)); // t=1 advances to t=2
         let in_data = Pins(0).set_data(0xAB);
-        cpu.tick(in_data);           // t=2 completes instruction
+        cpu.tick(in_data); // t=2 completes instruction
 
         assert!(cpu.at_instruction_boundary());
         // instruction_tstates excludes wait states: should be 3 (the R3 token length)
         assert_eq!(cpu.instruction_tstates(), 3);
         // wait_states counts only the inserted waits
         assert_eq!(cpu.wait_states(), 2);
+    }
+
+    /// Run one instruction from `mem` (PC=0) with a trivial memory model.
+    /// Returns the CPU and the number of T-states executed.
+    fn e03_10_run(mem: &[u8]) -> (Cpu, u32) {
+        let mut cpu = Cpu::new();
+        e03_10_run_cpu(&mut cpu, mem)
+    }
+
+    fn e03_10_run_cpu(cpu: &mut Cpu, mem: &[u8]) -> (Cpu, u32) {
+        let mut last = Pins(0);
+        let mut n = 0u32;
+        loop {
+            let inp = if last.has(Pins::MREQ) && last.has(Pins::RD) {
+                let b = mem.get(last.addr() as usize).copied().unwrap_or(0);
+                Pins(0).set_data(b)
+            } else {
+                Pins(0)
+            };
+            last = cpu.tick(inp);
+            n += 1;
+            if cpu.at_instruction_boundary() || n > 64 {
+                break;
+            }
+        }
+        let done = core::mem::take(cpu);
+        (done, n)
+    }
+
+    #[test]
+    fn e03_10_nop_4t() {
+        let (cpu, n) = e03_10_run(&[0x00]);
+        assert_eq!(n, 4);
+        assert_eq!(cpu.regs.pc, 1);
+        assert_eq!(cpu.regs.r, 1);
+    }
+
+    #[test]
+    fn e03_10_ld_bc_nn_10t() {
+        let (cpu, n) = e03_10_run(&[0x01, 0x34, 0x12]);
+        assert_eq!(n, 10);
+        assert_eq!(cpu.regs.pc, 3);
+    }
+
+    #[test]
+    fn e03_10_cb_prefix_8t() {
+        let (cpu, n) = e03_10_run(&[0xCB, 0x00]);
+        assert_eq!(n, 8);
+        assert_eq!(cpu.regs.r, 2);
+        assert_eq!(cpu.regs.pc, 2);
+    }
+
+    #[test]
+    fn e03_10_ed_nop_8t() {
+        let (_cpu, n) = e03_10_run(&[0xED, 0x00]);
+        assert_eq!(n, 8);
+    }
+
+    #[test]
+    fn e03_10_dd_ld_ix_nn_14t() {
+        let (cpu, n) = e03_10_run(&[0xDD, 0x21, 0x34, 0x12]);
+        assert_eq!(n, 14);
+        assert_eq!(cpu.regs.pc, 4);
+    }
+
+    #[test]
+    fn e03_10_dd_dd_chain() {
+        let (cpu, n) = e03_10_run(&[0xDD, 0xDD, 0x21, 0x34, 0x12]);
+        assert_eq!(n, 18);
+        assert_eq!(cpu.regs.r, 3);
+        assert_eq!(cpu.regs.pc, 5);
+    }
+
+    #[test]
+    fn e03_10_dd_ed() {
+        let (_cpu, n) = e03_10_run(&[0xDD, 0xED, 0x44]);
+        assert_eq!(n, 12);
+    }
+
+    #[test]
+    fn e03_10_ddcb_bit_20t() {
+        let (cpu, n) = e03_10_run(&[0xDD, 0xCB, 0x05, 0x46]);
+        assert_eq!(n, 20);
+        assert_eq!(cpu.regs.pc, 4);
+        assert_eq!(cpu.eng.opb, 0x46);
+    }
+
+    #[test]
+    fn e03_10_fd_cb_rlc_23t() {
+        let (_cpu, n) = e03_10_run(&[0xFD, 0xCB, 0x02, 0x06]);
+        assert_eq!(n, 23);
+    }
+
+    #[test]
+    fn e03_10_m1_extended() {
+        let (_cpu, n) = e03_10_run(&[0x03]);
+        assert_eq!(n, 6);
+    }
+
+    #[test]
+    fn e03_10_refresh_bus() {
+        let mut cpu = Cpu::new();
+        cpu.regs.i = 0x12;
+        cpu.regs.r = 0x34;
+        let _t1 = cpu.tick(Pins(0));
+        let _t2 = cpu.tick(Pins(0));
+        let t3 = cpu.tick(Pins(0));
+        assert_eq!(t3.addr(), 0x1235);
+        assert!(t3.has(Pins::RFSH));
+        assert!(t3.has(Pins::MREQ));
+    }
+
+    #[test]
+    fn e03_10_r_bit7_kept() {
+        let mut cpu = Cpu::new();
+        cpu.regs.r = 0xFF;
+        let (cpu, _n) = e03_10_run_cpu(&mut cpu, &[0x00]);
+        assert_eq!(cpu.regs.r, 0x80);
     }
 }
