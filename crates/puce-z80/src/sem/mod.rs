@@ -280,4 +280,50 @@ mod tests {
         assert_eq!(cpu.regs.b, 0xBB, "B unchanged after NOP");
         assert_eq!(cpu.regs.f, 0xCC, "F unchanged after NOP");
     }
+
+    #[test]
+    fn e05_04_ld_b_c() {
+        let mut cpu = Cpu::new();
+        cpu.regs.b = 0x11;
+        cpu.regs.c = 0x22;
+        // LD B,C (opcode 0x41)
+        sem(&mut cpu, Table::Main, 0x41, 0);
+        assert_eq!(cpu.regs.b, 0x22, "LD B,C copies C to B");
+    }
+
+    #[test]
+    fn e05_04_ld_a_hl() {
+        let mut cpu = Cpu::new();
+        cpu.eng.tmp_l = 0xAB; // Simulate memory read into tmp_l
+                              // LD A,(HL) (opcode 0x7E): y=7, z=6
+        sem(&mut cpu, Table::Main, 0x7E, 0);
+        assert_eq!(cpu.regs.a, 0xAB, "LD A,(HL) loads tmp_l into A");
+    }
+
+    #[test]
+    fn e05_04_ld_hl_r() {
+        let mut cpu = Cpu::new();
+        cpu.regs.e = 0xCD;
+        // LD (HL),E (opcode 0x73): y=6, z=3
+        sem(&mut cpu, Table::Main, 0x73, 0);
+        assert_eq!(cpu.eng.tmp_l, 0xCD, "LD (HL),E stores E into tmp_l");
+    }
+
+    #[test]
+    fn e05_04_ld_r_n() {
+        let mut cpu = Cpu::new();
+        cpu.eng.tmp_l = 0x99; // Simulate immediate byte read into tmp_l
+                              // LD H,n (opcode 0x26): x=0, y=4, z=6
+        sem(&mut cpu, Table::Main, 0x26, 0);
+        assert_eq!(cpu.regs.h, 0x99, "LD H,n loads immediate into H");
+    }
+
+    #[test]
+    fn e05_04_ld_hl_n_no_hook() {
+        let mut cpu = Cpu::new();
+        cpu.eng.tmp_l = 0xFF; // Immediate byte already in tmp_l
+                              // LD (HL),n (opcode 0x36): x=0, y=6, z=6 - no hook should run
+        sem(&mut cpu, Table::Main, 0x36, 0);
+        assert_eq!(cpu.eng.tmp_l, 0xFF, "LD (HL),n leaves tmp_l unchanged");
+    }
 }

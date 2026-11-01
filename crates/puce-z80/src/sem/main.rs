@@ -1,7 +1,9 @@
 //! Main opcode table semantics.
 //!
-//! Implements hooks for NOP, DI, EI, HALT, EX AF,AF', EXX, and EX DE,HL.
+//! Implements hooks for NOP, DI, EI, HALT, EX AF,AF', EXX, EX DE,HL,
+//! and all LD 8-bit register/register/immediate/(HL) instructions.
 
+use super::regs::{r8, set_r8};
 use crate::cpu::Cpu;
 
 /// Execute main-table instruction semantics.
@@ -9,6 +11,12 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
     if hook_no != 0 {
         return;
     }
+
+    // Decode opcode fields for LD instructions
+    let x = op >> 6;
+    let y = (op >> 3) & 7;
+    let z = op & 7;
+
     match op {
         // NOP (0x00): no hook needed - already a no-op
         0x00 => {}
@@ -48,5 +56,26 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
         }
 
         _ => {}
+    }
+
+    // LD r,r / LD r,(HL) / LD (HL),r family (opcodes 0x40-0x7F, excluding HALT at 0x76)
+    if x == 1 && op != 0x76 {
+        if y == 6 && z != 6 {
+            // LD (HL),r(z): store register into memory via tmp_l
+            cpu.eng.tmp_l = r8(cpu, z);
+        } else if y != 6 && z == 6 {
+            // LD r(y),(HL): load from memory (already in tmp_l) into register
+            set_r8(cpu, y, cpu.eng.tmp_l);
+        } else {
+            // LD r(y),r(z): register to register
+            set_r8(cpu, y, r8(cpu, z));
+        }
+    }
+
+    // LD r,n / LD (HL),n family (opcodes with x=0, z=6)
+    // LD (HL),n (y=6) needs no hook: tmp_l already contains the byte.
+    if x == 0 && z == 6 && y != 6 {
+        // LD r(y),n: immediate value already in tmp_l from data fetch
+        set_r8(cpu, y, cpu.eng.tmp_l);
     }
 }
