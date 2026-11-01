@@ -14,6 +14,7 @@ extern crate std;
 /// Crate version string (from Cargo.toml).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+pub use bus::{Bus, Cycle, SimpleRam};
 pub use cpu::Cpu;
 pub use pins::Pins;
 pub use regs::Regs;
@@ -27,6 +28,8 @@ pub mod pins;
 pub mod regs;
 // CPU top-level struct and tick interface.
 pub mod cpu;
+// Bus trait and SimpleRam test implementation.
+pub mod bus;
 // Instruction semantics dispatch (stub, filled by E05+).
 pub(crate) mod sem;
 // Generated opcode decode tables.
