@@ -125,6 +125,38 @@ fn compute_logic_flags(res: u8, h: u8) -> u8 {
     flags
 }
 
+/// INC 8-bit: increment value, set flags (C preserved).
+pub fn inc8(v: u8, f: u8) -> (u8, u8) {
+    let res = v.wrapping_add(1);
+    let mut flags = (f & flag::C) | (res & 0xA8);
+    if res == 0 {
+        flags |= flag::Z;
+    }
+    if (res & 0x0F) == 0 {
+        flags |= flag::H;
+    }
+    if res == 0x80 {
+        flags |= flag::PV;
+    }
+    (res, flags)
+}
+
+/// DEC 8-bit: decrement value, set flags (C preserved, N set).
+pub fn dec8(v: u8, f: u8) -> (u8, u8) {
+    let res = v.wrapping_sub(1);
+    let mut flags = (f & flag::C) | (res & 0xA8) | flag::N;
+    if res == 0 {
+        flags |= flag::Z;
+    }
+    if (res & 0x0F) == 0x0F {
+        flags |= flag::H;
+    }
+    if res == 0x7F {
+        flags |= flag::PV;
+    }
+    (res, flags)
+}
+
 /// Compute even parity bit. Returns flag::PV if bit count is even, 0 otherwise.
 pub fn parity(v: u8) -> u8 {
     let mut bits = v;

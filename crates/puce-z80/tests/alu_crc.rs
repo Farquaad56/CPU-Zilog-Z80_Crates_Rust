@@ -60,7 +60,7 @@ fn e04_01_tsv_missing_panics() {
     alu_crc("nope");
 }
 
-use puce_z80::alu::alu8;
+use puce_z80::alu::{alu8, inc8, dec8};
 
 /// Run ALU operation across all inputs and compute CRC of outputs.
 fn alu8_crc(op: u8) -> (u64, u32) {
@@ -171,4 +171,69 @@ fn e04_03_xor_zero() {
     let (a, f) = alu8(5, 0xAA, 0xAA, 0xFF);
     assert_eq!(a, 0);
     assert_eq!(f, 0x44);
+}
+
+/// CRC test for inc8 across all values and carry flag states.
+fn inc8_crc() -> (u64, u32) {
+    let mut crc = Crc32::new();
+    let mut count = 0u64;
+    for v in 0u8..=255 {
+        for c in 0u8..=1 {
+            let (r, f) = inc8(v, c);
+            crc.update(r);
+            crc.update(f);
+            count += 1;
+        }
+    }
+    (count, crc.finish())
+}
+
+/// CRC test for dec8 across all values and carry flag states.
+fn dec8_crc() -> (u64, u32) {
+    let mut crc = Crc32::new();
+    let mut count = 0u64;
+    for v in 0u8..=255 {
+        for c in 0u8..=1 {
+            let (r, f) = dec8(v, c);
+            crc.update(r);
+            crc.update(f);
+            count += 1;
+        }
+    }
+    (count, crc.finish())
+}
+
+#[test]
+fn e04_04_inc8() {
+    let (count, crc) = inc8_crc();
+    let (exp_count, exp_crc) = alu_crc("inc8");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "inc8 CRC mismatch");
+}
+
+#[test]
+fn e04_04_dec8() {
+    let (count, crc) = dec8_crc();
+    let (exp_count, exp_crc) = alu_crc("dec8");
+    assert_eq!(count, exp_count);
+    assert_eq!(crc, exp_crc, "dec8 CRC mismatch");
+}
+
+#[test]
+fn e04_04_inc_overflow() {
+    let (_, f) = inc8(0x7F, 0);
+    assert_eq!(f & 0x04, 0x04, "inc8(0x7F) must set P/V");
+    assert_eq!(f & 0x10, 0x10, "inc8(0x7F) must set H");
+}
+
+#[test]
+fn e04_04_dec_overflow() {
+    let (_, f) = dec8(0x80, 0);
+    assert_eq!(f & 0x04, 0x04, "dec8(0x80) must set P/V");
+}
+
+#[test]
+fn e04_04_carry_kept() {
+    let (_, f) = inc8(0xFF, 1);
+    assert_eq!(f & 0x01, 0x01, "inc8 must preserve carry flag");
 }
