@@ -1,5 +1,6 @@
 //! CPU top-level struct and tick interface.
 
+use crate::bus::{Bus, Cycle};
 use crate::engine::addr::resolve;
 use crate::engine::decode::{decode, plan_of, Decoded, Prefix, Table};
 use crate::engine::mcycle::fetch_pins;
@@ -264,6 +265,122 @@ impl Cpu {
     /// T-states of the current (or last completed) instruction, excluding WAIT states.
     pub fn instruction_tstates(&self) -> u32 {
         self.eng.ts
+    }
+
+    /// Execute one instruction and return the T-states consumed (WAIT included).
+    ///
+    /// Convenience API on top of `tick`: it serves memory and ports through the
+    /// `Bus` trait, inserts `extra_wait` states and stops at the next instruction
+    /// boundary. There is a single timing implementation (D-002).
+    pub fn step<B: Bus>(&mut self, bus: &mut B) -> u32 {
+        let mut tstates: u32 = 0;
+        let mut last = Pins(0);
+        let mut read_data: Option<u8> = None;
+        let mut write_done = false;
+        let mut wait_left: u8 = 0;
+
+        loop {
+            let mut pins_in = Pins(0);
+
+            // A read requested by the previous outputs: the data goes into this tick.
+            // The bus is called once per cycle even if the CPU repeats its outputs (WAIT).
+            let mem_rd = last.has(Pins::MREQ) && last.has(Pins::RD);
+            let io_rd = last.has(Pins::IORQ) && last.has(Pins::RD) && !last.has(Pins::M1);
+            if mem_rd || io_rd {
+                let data = *read_data.get_or_insert_with(|| {
+                    if mem_rd {
+                        bus.read(last.addr())
+                    } else {
+                        bus.io_read(last.addr())
+                    }
+                });
+                pins_in = pins_in.set_data(data);
+            } else {
+                read_data = None;
+            }
+
+            // A write requested by the previous outputs: performed once per cycle.
+            let mem_wr = last.has(Pins::MREQ) && last.has(Pins::WR);
+            let io_wr = last.has(Pins::IORQ) && last.has(Pins::WR);
+            if mem_wr || io_wr {
+                if !write_done {
+                    if mem_wr {
+                        bus.write(last.addr(), last.data());
+                    } else {
+                        bus.io_write(last.addr(), last.data());
+                    }
+                    write_done = true;
+                }
+            } else {
+                write_done = false;
+            }
+
+            // Hold WAIT while the next tick is a sampling point of the current cycle.
+            if wait_left > 0 && self.samples_wait_next() {
+                pins_in = pins_in.with(Pins::WAIT);
+                wait_left -= 1;
+            }
+
+            // INT, NMI and BUSRQ are only forwarded here (handled in E09).
+            if bus.irq() {
+                pins_in = pins_in.with(Pins::INT);
+            }
+            if bus.nmi() {
+                pins_in = pins_in.with(Pins::NMI);
+            }
+            if bus.busrq() {
+                pins_in = pins_in.with(Pins::BUSRQ);
+            }
+
+            // At the first T of a bus cycle the address is valid: ask for wait states.
+            let starting = self.cycle_starting();
+            last = self.tick(pins_in);
+            bus.on_tick(last);
+            tstates += 1;
+            if let Some(kind) = starting {
+                wait_left = bus.extra_wait(kind, last.addr());
+            }
+
+            debug_assert!(
+                tstates < 100,
+                "step() ran 100 ticks without an instruction boundary"
+            );
+            if self.at_instruction_boundary() {
+                break;
+            }
+        }
+
+        tstates
+    }
+
+    /// Kind of bus cycle that the next tick starts (its t0), if any.
+    fn cycle_starting(&self) -> Option<Cycle> {
+        if !self.eng.active {
+            return Some(Cycle::Fetch);
+        }
+        if self.eng.t != 0 {
+            return None;
+        }
+        match self.eng.plan[self.eng.idx].kind {
+            Kind::F => Some(Cycle::Fetch),
+            Kind::R => Some(Cycle::MemRead),
+            Kind::W => Some(Cycle::MemWrite),
+            Kind::N => Some(Cycle::IoRead),
+            Kind::O => Some(Cycle::IoWrite),
+            Kind::I | Kind::X => None,
+        }
+    }
+
+    /// True if the next tick samples the WAIT pin (T2 of F/R/W, T3 of N/O).
+    fn samples_wait_next(&self) -> bool {
+        if !self.eng.active {
+            return false;
+        }
+        match self.eng.plan[self.eng.idx].kind {
+            Kind::F | Kind::R | Kind::W => self.eng.t == 1,
+            Kind::N | Kind::O => self.eng.t == 2,
+            Kind::I | Kind::X => false,
+        }
     }
 }
 
@@ -940,5 +1057,109 @@ mod tests {
         cpu.regs.r = 0xFF;
         let (cpu, _n) = e03_10_run_cpu(&mut cpu, &[0x00]);
         assert_eq!(cpu.regs.r, 0x80);
+    }
+
+    /// Spy bus for the E03-12 tests: 64 KB RAM plus call logs.
+    struct E0312Spy {
+        ram: crate::bus::SimpleRam,
+        reads: std::vec::Vec<u16>,
+        writes: std::vec::Vec<(u16, u8)>,
+        io_reads: u32,
+        ticks: u32,
+        fetch_wait: u8,
+    }
+
+    impl Bus for E0312Spy {
+        fn read(&mut self, addr: u16) -> u8 {
+            self.reads.push(addr);
+            self.ram.read(addr)
+        }
+        fn write(&mut self, addr: u16, data: u8) {
+            self.writes.push((addr, data));
+            self.ram.write(addr, data);
+        }
+        fn io_read(&mut self, _port: u16) -> u8 {
+            self.io_reads += 1;
+            0xFF
+        }
+        fn extra_wait(&mut self, kind: Cycle, _addr: u16) -> u8 {
+            if kind == Cycle::Fetch {
+                self.fetch_wait
+            } else {
+                0
+            }
+        }
+        fn on_tick(&mut self, _pins: Pins) {
+            self.ticks += 1;
+        }
+    }
+
+    fn e03_12_spy(prog: &[u8], fetch_wait: u8) -> E0312Spy {
+        let mut spy = E0312Spy {
+            ram: crate::bus::SimpleRam::new(),
+            reads: std::vec::Vec::new(),
+            writes: std::vec::Vec::new(),
+            io_reads: 0,
+            ticks: 0,
+            fetch_wait,
+        };
+        spy.ram.mem[..prog.len()].copy_from_slice(prog);
+        spy
+    }
+
+    #[test]
+    fn e03_12_step_nop() {
+        let mut bus = e03_12_spy(&[0x00], 0);
+        let mut cpu = Cpu::new();
+        assert_eq!(cpu.step(&mut bus), 4);
+    }
+
+    #[test]
+    fn e03_12_step_ld_bc_nn() {
+        let mut bus = e03_12_spy(&[0x01, 0x34, 0x12], 0);
+        let mut cpu = Cpu::new();
+        assert_eq!(cpu.step(&mut bus), 10);
+        assert_eq!(bus.reads.as_slice(), &[0u16, 1, 2]);
+    }
+
+    #[test]
+    fn e03_12_step_write_logged() {
+        let mut bus = e03_12_spy(&[0xDD, 0x36, 0x05, 0x77], 0);
+        let mut cpu = Cpu::new();
+        cpu.regs.ix = 0x1000;
+        let _t = cpu.step(&mut bus);
+        assert_eq!(bus.writes.as_slice(), &[(0x1005u16, 0x77u8)]);
+    }
+
+    #[test]
+    fn e03_12_extra_wait_adds() {
+        let mut bus = e03_12_spy(&[0x00], 2);
+        let mut cpu = Cpu::new();
+        assert_eq!(cpu.step(&mut bus), 6);
+    }
+
+    #[test]
+    fn e03_12_on_tick_count() {
+        let mut bus = e03_12_spy(&[0x00], 0);
+        let mut cpu = Cpu::new();
+        let n = cpu.step(&mut bus);
+        assert_eq!(bus.ticks, 4);
+        assert_eq!(bus.ticks, n);
+    }
+
+    #[test]
+    fn e03_12_io_read_called() {
+        let mut bus = e03_12_spy(&[0xDB, 0x10], 0);
+        let mut cpu = Cpu::new();
+        let _t = cpu.step(&mut bus);
+        assert_eq!(bus.io_reads, 1);
+    }
+
+    #[test]
+    fn e03_12_returns_tstates() {
+        let mut bus = e03_12_spy(&[0x01, 0x34, 0x12], 1);
+        let mut cpu = Cpu::new();
+        assert_eq!(cpu.step(&mut bus), 11);
+        assert_eq!(cpu.wait_states(), 1);
     }
 }
