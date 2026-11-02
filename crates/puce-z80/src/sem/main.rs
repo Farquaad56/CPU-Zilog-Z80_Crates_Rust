@@ -11,6 +11,7 @@ use crate::regs::flag;
 /// Execute main-table instruction semantics.
 pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
     if hook_no != 0 {
+        sem_main_x1(cpu, op);
         return;
     }
 
@@ -348,5 +349,122 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
     // JP (HL) (0xE9): jump to HL.
     if op == 0xE9 {
         cpu.regs.pc = hl(cpu);
+    }
+
+    // DJNZ d (0x10): X0: B = B-1; cond = (B != 0); D = TMP.L.
+    if op == 0x10 {
+        let b = cpu.regs.b.wrapping_sub(1);
+        cpu.regs.b = b;
+        cpu.eng.cond = b != 0;
+        cpu.eng.disp = cpu.eng.tmp_l;
+    }
+
+    // JR d (0x18): X0: D = TMP.L; cond = true.
+    if op == 0x18 {
+        cpu.eng.disp = cpu.eng.tmp_l;
+        cpu.eng.cond = true;
+    }
+
+    // JR cc,d (0x20, 0x28, 0x30, 0x38): X0: D = TMP.L; cond = condition(y-4).
+    if op == 0x20 || op == 0x28 || op == 0x30 || op == 0x38 {
+        let cc = ((op >> 3) & 7) - 4;
+        cpu.eng.disp = cpu.eng.tmp_l;
+        cpu.eng.cond = alu::cond(cpu.regs.f, cc);
+    }
+}
+
+/// Hooks X1 (after the bus/internal cycles) of the main table.
+fn sem_main_x1(cpu: &mut Cpu, op: u8) {
+    // JR / JR cc / DJNZ: if cond, PC = PC + signed(D); WZ = PC.
+    if matches!(op, 0x10 | 0x18 | 0x20 | 0x28 | 0x30 | 0x38) && cpu.eng.cond {
+        let target = signed_jr_target(cpu.regs.pc, cpu.eng.disp);
+        cpu.regs.wz = target;
+        cpu.regs.pc = target;
+    }
+}
+/// Compute PC + signed(displacement) for JR/JR cc/DJNZ.
+fn signed_jr_target(pc: u16, disp: u8) -> u16 {
+    let offset = disp as i8 as i32;
+    (pc as i32 + offset) as u16
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::regs::flag;
+
+    #[test]
+    fn e05_13_jr_forward() {
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x1000;
+        cpu.eng.tmp_l = 5; // +5 displacement
+        sem_main(&mut cpu, 0x18, 0); // JR d X0: store disp, cond=true
+        assert_eq!(cpu.eng.disp, 5);
+        assert!(cpu.eng.cond);
+        sem_main_x1(&mut cpu, 0x18); // JR d X1: jump
+        assert_eq!(cpu.regs.pc, 0x1005);
+        assert_eq!(cpu.regs.wz, 0x1005);
+    }
+
+    #[test]
+    fn e05_13_jr_cc_taken_12t() {
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x1000;
+        cpu.regs.f = 0x00; // Z clear -> NZ condition true
+        cpu.eng.tmp_l = 3;
+        sem_main(&mut cpu, 0x20, 0); // JR NZ,d X0: store disp, evaluate cond
+        assert!(cpu.eng.cond);
+        sem_main_x1(&mut cpu, 0x20); // JR NZ,d X1: jump taken
+        assert_eq!(cpu.regs.pc, 0x1003);
+        assert_eq!(cpu.regs.wz, 0x1003);
+    }
+
+    #[test]
+    fn e05_13_jr_cc_not_taken_7t() {
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x1000;
+        cpu.regs.f = flag::Z; // Z set -> NZ condition false
+        cpu.eng.tmp_l = 3;
+        sem_main(&mut cpu, 0x20, 0); // JR NZ,d X0: store disp, evaluate cond
+        assert!(!cpu.eng.cond);
+        let pc_before = cpu.regs.pc;
+        sem_main_x1(&mut cpu, 0x20); // JR NZ,d X1: jump not taken
+        assert_eq!(cpu.regs.pc, pc_before);
+    }
+
+    #[test]
+    fn e05_13_djnz_loop() {
+        let mut cpu = Cpu::new();
+        cpu.regs.b = 2;
+        cpu.regs.pc = 0x1000;
+        cpu.eng.tmp_l = 252; // -4 as signed byte (0xFC)
+
+        // First iteration: B=2 -> B=1, cond=true, jump taken (13 T)
+        sem_main(&mut cpu, 0x10, 0);
+        assert_eq!(cpu.regs.b, 1);
+        assert!(cpu.eng.cond);
+        sem_main_x1(&mut cpu, 0x10);
+        assert_eq!(cpu.regs.pc, 0x0FFC);
+
+        // Second iteration: B=1 -> B=0, cond=false, jump not taken (8 T)
+        cpu.regs.pc = 0x1000;
+        sem_main(&mut cpu, 0x10, 0);
+        assert_eq!(cpu.regs.b, 0);
+        assert!(!cpu.eng.cond);
+        let pc_before = cpu.regs.pc;
+        sem_main_x1(&mut cpu, 0x10);
+        assert_eq!(cpu.regs.pc, pc_before);
+    }
+
+    #[test]
+    fn e05_13_jr_backward() {
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x1000;
+        cpu.eng.tmp_l = 254; // -2 as signed byte (0xFE)
+        sem_main(&mut cpu, 0x18, 0);
+        assert_eq!(cpu.eng.disp, 254);
+        sem_main_x1(&mut cpu, 0x18);
+        assert_eq!(cpu.regs.pc, 0x0FFE);
+        assert_eq!(cpu.regs.wz, 0x0FFE);
     }
 }
