@@ -494,4 +494,39 @@ mod tests {
         sem(&mut cpu, Table::Main, 0x19, 0); // ADD HL,DE
         assert_eq!(cpu.regs.wz, 0x1235, "WZ = HL+1 before addition");
     }
+
+    #[test]
+    fn e05_09_add_a_b() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x44;
+        cpu.regs.b = 0x22;
+        sem(&mut cpu, Table::Main, 0x80, 0); // ADD A,B
+        assert_eq!(cpu.regs.a, 0x66, "ADD A,B computes correct result");
+    }
+
+    #[test]
+    fn e05_09_cp_n() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x44;
+        cpu.eng.tmp_l = 0x22; // immediate value loaded into tmp_l
+        sem(&mut cpu, Table::Main, 0xFE, 0); // CP n (y=7)
+        assert_eq!(cpu.regs.a, 0x44, "CP n preserves A");
+    }
+
+    #[test]
+    fn e05_09_sbc_a_hl() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x80;
+        cpu.eng.tmp_l = 0x40; // (HL) value loaded into tmp_l
+        sem(&mut cpu, Table::Main, 0x9E, 0); // SBC A,(HL) (y=3, z=6)
+        assert_eq!(cpu.regs.a, 0x40, "SBC A,(HL) computes correct result");
+    }
+
+    #[test]
+    fn e05_09_xor_a() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x44;
+        sem(&mut cpu, Table::Main, 0xAF, 0); // XOR A (y=5, z=7)
+        assert_eq!(cpu.regs.a, 0x00, "XOR A clears accumulator");
+    }
 }

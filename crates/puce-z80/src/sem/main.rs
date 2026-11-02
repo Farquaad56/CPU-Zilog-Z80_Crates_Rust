@@ -189,4 +189,27 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
         set_hl(cpu, res);
         set_f(cpu, new_f);
     }
+
+    // ALU 8-bit register family (opcodes with x=2): ADD/ADC/SUB/SBC/AND/XOR/OR/CP A,r
+    if x == 2 {
+        let a = cpu.regs.a;
+        let b = r8(cpu, z);
+        let (res, new_f) = alu::alu8(y, a, b, cpu.regs.f);
+        // CP preserves A; all other ALU ops store result in A
+        if y != 7 {
+            set_r8(cpu, 7, res);
+        }
+        set_f(cpu, new_f);
+    }
+
+    // ALU 8-bit immediate family (opcodes with x=3, z=6): ADD/ADC/SUB/SBC/AND/XOR/OR/CP A,n
+    if x == 3 && z == 6 {
+        let a = cpu.regs.a;
+        let b = cpu.eng.tmp_l; // immediate value already loaded into tmp_l
+        let (res, new_f) = alu::alu8(y, a, b, cpu.regs.f);
+        if y != 7 {
+            set_r8(cpu, 7, res);
+        }
+        set_f(cpu, new_f);
+    }
 }
