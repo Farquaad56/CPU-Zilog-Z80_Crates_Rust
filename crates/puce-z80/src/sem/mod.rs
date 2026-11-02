@@ -428,4 +428,36 @@ mod tests {
         sem(&mut cpu, Table::Main, 0x09, 0); // ADD HL,BC is not LD rp,nn
         assert_eq!(cpu.regs.bc(), 0x1111, "ADD HL,BC must not load BC from WZ");
     }
+
+    #[test]
+    fn e05_07_inc_b() {
+        let mut cpu = Cpu::new();
+        cpu.regs.b = 0x4F;
+        sem(&mut cpu, Table::Main, 0x04, 0); // INC B
+        assert_eq!(cpu.regs.b, 0x50, "INC B increments");
+    }
+
+    #[test]
+    fn e05_07_dec_a_overflow() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x80;
+        sem(&mut cpu, Table::Main, 0x3D, 0); // DEC A
+        assert_eq!(cpu.regs.a, 0x7F, "DEC A from 0x80 wraps to 0x7F");
+    }
+
+    #[test]
+    fn e05_07_inc_hl() {
+        let mut cpu = Cpu::new();
+        cpu.eng.tmp_l = 0xFF; // Simulate memory read into tmp_l
+        sem(&mut cpu, Table::Main, 0x34, 0); // INC (HL)
+        assert_eq!(cpu.eng.tmp_l, 0x00, "INC (HL) wraps via tmp_l");
+    }
+
+    #[test]
+    fn e05_07_carry_kept() {
+        let mut cpu = Cpu::new();
+        cpu.regs.f = 1; // Carry set
+        sem(&mut cpu, Table::Main, 0x04, 0); // INC B (doesn't affect carry)
+        assert_eq!(cpu.regs.f & 1, 1, "INC preserves carry flag");
+    }
 }

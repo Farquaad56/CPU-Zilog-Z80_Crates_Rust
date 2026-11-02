@@ -3,7 +3,8 @@
 //! Implements hooks for NOP, DI, EI, HALT, EX AF,AF', EXX, EX DE,HL,
 //! and all LD 8-bit register/register/immediate/(HL) instructions.
 
-use super::regs::{hl, r8, set_hl, set_r8, set_rp};
+use super::regs::{hl, r8, set_f, set_hl, set_r8, set_rp};
+use crate::alu;
 use crate::cpu::Cpu;
 
 /// Execute main-table instruction semantics.
@@ -143,6 +144,23 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
                 cpu.regs.wz = nn_plus1;
             }
             _ => {}
+        }
+    }
+
+    // INC r / DEC r family (opcodes with x=0, z=4 or z=5)
+    if x == 0 && (z == 4 || z == 5) {
+        let v = r8(cpu, y);
+        let old_f = cpu.regs.f;
+        if z == 4 {
+            // INC r: increment register
+            let (res, new_f) = alu::inc8(v, old_f);
+            set_r8(cpu, y, res);
+            set_f(cpu, new_f);
+        } else {
+            // DEC r: decrement register
+            let (res, new_f) = alu::dec8(v, old_f);
+            set_r8(cpu, y, res);
+            set_f(cpu, new_f);
         }
     }
 }
