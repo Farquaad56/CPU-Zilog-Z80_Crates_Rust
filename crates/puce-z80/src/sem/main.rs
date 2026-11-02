@@ -371,6 +371,35 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
         cpu.eng.disp = cpu.eng.tmp_l;
         cpu.eng.cond = alu::cond(cpu.regs.f, cc);
     }
+
+    // CALL nn (0xCD): X0: TMP = PC (return address).
+    if op == 0xCD {
+        cpu.eng.tmp_h = (cpu.regs.pc >> 8) as u8;
+        cpu.eng.tmp_l = cpu.regs.pc as u8;
+    }
+
+    // CALL cc,nn family (x=3, z=4): X0: cond = condition(y); TMP = PC.
+    if x == 3 && z == 4 {
+        cpu.eng.cond = alu::cond(cpu.regs.f, y);
+        cpu.eng.tmp_h = (cpu.regs.pc >> 8) as u8;
+        cpu.eng.tmp_l = cpu.regs.pc as u8;
+    }
+
+    // RST n*8 family (x=3, z=7): X0: TMP = PC.
+    if x == 3 && z == 7 {
+        cpu.eng.tmp_h = (cpu.regs.pc >> 8) as u8;
+        cpu.eng.tmp_l = cpu.regs.pc as u8;
+    }
+
+    // RET (0xC9): X0: PC = WZ (address read from stack).
+    if op == 0xC9 {
+        cpu.regs.pc = cpu.regs.wz;
+    }
+
+    // RET cc family (x=3, z=0): X0: cond = condition(y).
+    if x == 3 && z == 0 {
+        cpu.eng.cond = alu::cond(cpu.regs.f, y);
+    }
 }
 
 /// Hooks X1 (after the bus/internal cycles) of the main table.
@@ -380,6 +409,31 @@ fn sem_main_x1(cpu: &mut Cpu, op: u8) {
         let target = signed_jr_target(cpu.regs.pc, cpu.eng.disp);
         cpu.regs.wz = target;
         cpu.regs.pc = target;
+    }
+
+    // CALL nn (0xCD): X1: PC = WZ.
+    if op == 0xCD {
+        cpu.regs.pc = cpu.regs.wz;
+    }
+
+    // CALL cc,nn family (x=3, z=4): X1: if cond, PC = WZ.
+    let x = op >> 6;
+    let y = (op >> 3) & 7;
+    let z = op & 7;
+    if x == 3 && z == 4 && cpu.eng.cond {
+        cpu.regs.pc = cpu.regs.wz;
+    }
+
+    // RST n*8 family (x=3, z=7): X1: PC = y*8; WZ = PC.
+    if x == 3 && z == 7 {
+        let target = (y as u16) * 8;
+        cpu.regs.wz = target;
+        cpu.regs.pc = target;
+    }
+
+    // RET cc family (x=3, z=0): X1: if cond, PC = WZ.
+    if x == 3 && z == 0 && cpu.eng.cond {
+        cpu.regs.pc = cpu.regs.wz;
     }
 }
 /// Compute PC + signed(displacement) for JR/JR cc/DJNZ.
@@ -466,5 +520,95 @@ mod tests {
         sem_main_x1(&mut cpu, 0x18);
         assert_eq!(cpu.regs.pc, 0x0FFE);
         assert_eq!(cpu.regs.wz, 0x0FFE);
+    }
+
+    #[test]
+    fn e05_14_call() {
+        // CALL nn: push return address (PC after opcode), jump to target.
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x1002; // PC already past the 3-byte CALL instruction
+        cpu.regs.sp = 0xFFFE;
+        cpu.regs.wz = 0x2000; // target address
+
+        // X0: TMP = PC (return address)
+        sem_main(&mut cpu, 0xCD, 0);
+        assert_eq!(cpu.eng.tmp_h, 0x10);
+        assert_eq!(cpu.eng.tmp_l, 0x02);
+
+        // Simulate stack writes (plan does W3:DecSp>H then W3:DecSp<L)
+        cpu.regs.sp = 0xFFFC;
+
+        // X1: PC = WZ
+        sem_main_x1(&mut cpu, 0xCD);
+        assert_eq!(cpu.regs.pc, 0x2000);
+    }
+
+    #[test]
+    fn e05_14_call_cc_not_taken_10t() {
+        // CALL NZ,nn not taken (Z flag set): PC unchanged after X1.
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x1002;
+        cpu.regs.f = flag::Z; // Z set -> NZ condition false
+        cpu.regs.wz = 0x2000;
+
+        // X0: evaluate condition, store return address in TMP
+        sem_main(&mut cpu, 0xC4, 0); // CALL NZ,nn
+        assert!(!cpu.eng.cond);
+
+        // Simulate stack writes (still happen even if not taken)
+        cpu.regs.sp = 0xFFFC;
+
+        // X1: condition false -> PC unchanged
+        sem_main_x1(&mut cpu, 0xC4);
+        assert_eq!(cpu.regs.pc, 0x1002);
+    }
+
+    #[test]
+    fn e05_14_ret() {
+        // RET: pop return address from stack into PC.
+        let mut cpu = Cpu::new();
+        cpu.regs.sp = 0xFFFE;
+        cpu.regs.wz = 0x3000; // address read from stack (WZ set by plan)
+
+        // X0: PC = WZ
+        sem_main(&mut cpu, 0xC9, 0);
+        assert_eq!(cpu.regs.pc, 0x3000);
+    }
+
+    #[test]
+    fn e05_14_ret_cc_11t() {
+        // RET Z taken (Z flag set): PC = WZ.
+        let mut cpu = Cpu::new();
+        cpu.regs.f = flag::Z; // Z set -> Z condition true
+        cpu.regs.wz = 0x4000;
+
+        // X0: evaluate condition
+        sem_main(&mut cpu, 0xC8, 0); // RET Z
+        assert!(cpu.eng.cond);
+
+        // X1: condition true -> PC = WZ
+        sem_main_x1(&mut cpu, 0xC8);
+        assert_eq!(cpu.regs.pc, 0x4000);
+    }
+
+    #[test]
+    fn e05_14_rst38() {
+        // RST 38H: push return address, jump to 0x38.
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x1001; // PC already past the 1-byte RST instruction
+        cpu.regs.sp = 0xFFFE;
+
+        // X0: TMP = PC (return address)
+        sem_main(&mut cpu, 0xFF, 0); // RST 38H
+        assert_eq!(cpu.eng.tmp_h, 0x10);
+        assert_eq!(cpu.eng.tmp_l, 0x01);
+
+        // Simulate stack writes (plan does W3:DecSp>H then W3:DecSp<L)
+        cpu.regs.sp = 0xFFFC;
+
+        // X1: PC = y*8 = 7*8 = 56 = 0x38; WZ = PC
+        sem_main_x1(&mut cpu, 0xFF);
+        assert_eq!(cpu.regs.pc, 0x38);
+        assert_eq!(cpu.regs.wz, 0x38);
     }
 }
