@@ -333,4 +333,20 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
             set_rp2(cpu, p, ((cpu.eng.tmp_h as u16) << 8) | cpu.eng.tmp_l as u16);
         }
     }
+
+    // JP nn (0xC3): unconditional jump to WZ.
+    if op == 0xC3 {
+        cpu.regs.pc = cpu.regs.wz;
+    }
+
+    // JP cc,nn family (x=3, z=2): conditional jump to WZ if condition met.
+    // y encodes the condition code: 0=NZ,1=Z,2=NC,3=C,4=PO,5=PE,6=P,7=M.
+    if x == 3 && z == 2 && alu::cond(cpu.regs.f, y) {
+        cpu.regs.pc = cpu.regs.wz;
+    }
+
+    // JP (HL) (0xE9): jump to HL.
+    if op == 0xE9 {
+        cpu.regs.pc = hl(cpu);
+    }
 }

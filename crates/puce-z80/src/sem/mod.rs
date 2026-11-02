@@ -647,4 +647,29 @@ mod tests {
         sem(&mut cpu, Table::Main, 0xE1, 0);
         assert_eq!(cpu.regs.hl(), 0x5678, "POP HL loads TMP");
     }
+
+    #[test]
+    fn e05_12_jp_taken() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x2000; // Target address in WZ (already read by plan)
+        sem(&mut cpu, Table::Main, 0xC3, 0); // JP nn
+        assert_eq!(cpu.regs.pc, 0x2000, "JP nn jumps to WZ");
+    }
+
+    #[test]
+    fn e05_12_jp_cc_not_taken() {
+        let mut cpu = Cpu::new();
+        cpu.regs.f = flag::Z; // Z set -> NZ condition false
+        cpu.regs.wz = 0x3000; // Target address in WZ
+        sem(&mut cpu, Table::Main, 0xC2, 0); // JP NZ,nn (y=0)
+        assert_ne!(cpu.regs.pc, 0x3000, "JP NZ not taken when Z set");
+    }
+
+    #[test]
+    fn e05_12_jp_hl() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x4000);
+        sem(&mut cpu, Table::Main, 0xE9, 0); // JP (HL)
+        assert_eq!(cpu.regs.pc, 0x4000, "JP (HL) jumps to HL");
+    }
 }
