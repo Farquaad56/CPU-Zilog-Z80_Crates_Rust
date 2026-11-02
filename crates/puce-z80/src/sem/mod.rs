@@ -38,6 +38,7 @@ mod tests {
     use super::*;
     use crate::engine::decode::Prefix;
     use crate::engine::plan::{Addr, Kind, Reg, Tok};
+    use crate::regs::flag;
     use crate::Pins;
     use std::boxed::Box;
 
@@ -528,5 +529,94 @@ mod tests {
         cpu.regs.a = 0x44;
         sem(&mut cpu, Table::Main, 0xAF, 0); // XOR A (y=5, z=7)
         assert_eq!(cpu.regs.a, 0x00, "XOR A clears accumulator");
+    }
+
+    #[test]
+    fn e05_10_rlca() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x85;
+        sem(&mut cpu, Table::Main, 0x07, 0); // RLCA (y=0)
+        assert_eq!(cpu.regs.a, 0x0B, "RLCA rotates left through carry");
+        assert_eq!(cpu.regs.f & flag::C, flag::C, "RLCA sets carry from bit 7");
+    }
+
+    #[test]
+    fn e05_10_rra() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x85;
+        cpu.regs.f = flag::C; // Carry set
+        sem(&mut cpu, Table::Main, 0x1F, 0); // RRA (y=3)
+        assert_eq!(cpu.regs.a, 0xC2, "RRA rotates right through carry");
+    }
+
+    #[test]
+    fn e05_10_daa_hook() {
+        // BCD addition scenario: hex result 0x7C needs DAA adjustment.
+        // Lower nibble C > 9, so add 6 -> 0x82 (upper nibble unchanged).
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x7C;
+        cpu.regs.f = flag::H; // Half-carry set (from prior addition)
+        sem(&mut cpu, Table::Main, 0x27, 0); // DAA (y=4)
+        assert_eq!(cpu.regs.a, 0x82, "DAA adjusts BCD result");
+    }
+
+    #[test]
+    fn e05_10_cpl() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x44;
+        sem(&mut cpu, Table::Main, 0x2F, 0); // CPL (y=5)
+        assert_eq!(cpu.regs.a, 0xBB, "CPL complements A");
+        assert_eq!(cpu.regs.f & flag::H, flag::H, "CPL sets H");
+        assert_eq!(cpu.regs.f & flag::N, flag::N, "CPL sets N");
+    }
+
+    #[test]
+    fn e05_10_scf_flags() {
+        let mut cpu = Cpu::new();
+        sem(&mut cpu, Table::Main, 0x37, 0); // SCF (y=6)
+        assert_eq!(cpu.regs.f & flag::C, flag::C, "SCF sets carry");
+        assert_eq!(cpu.regs.f & flag::H, 0, "SCF clears H");
+        assert_eq!(cpu.regs.f & flag::N, 0, "SCF clears N");
+    }
+
+    #[test]
+    fn e05_10_ccf_h() {
+        let mut cpu = Cpu::new();
+        cpu.regs.f = flag::C; // Carry set
+        sem(&mut cpu, Table::Main, 0x3F, 0); // CCF (y=7)
+        assert_eq!(cpu.regs.f & flag::C, 0, "CCF clears carry when it was set");
+    }
+
+    #[test]
+    fn e05_10_scf_ccf_q_formula() {
+        // Test both Q-factor and simple formulas for SCF/CCF X/Y bits.
+        // UNKNOWN - to confirm: which formula is correct will be determined
+        // by z80ccf/ZEXALL in E10-03. This test documents the difference.
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x5A;
+        cpu.regs.f = 0x00;
+        cpu.regs.q = 0x00;
+
+        // Simple formula: X,Y = bits 3,5 of A directly
+        let simple_xy = cpu.regs.a & 0x28;
+
+        // Q-factor formula: X,Y = bits 3,5 of (A | (F ^ Q))
+        let q_formula_val = cpu.regs.a | (cpu.regs.f ^ cpu.regs.q);
+        let q_xy = q_formula_val & 0x28;
+
+        // With F=Q=0, both formulas give the same result for this case
+        assert_eq!(simple_xy, q_xy, "With F=Q=0, simple and Q-factor agree");
+
+        // Now test with different F and Q to show they can differ
+        cpu.regs.f = 0x28; // Set X,Y bits in old flags
+        cpu.regs.q = 0x00;
+        let q_formula_val2 = cpu.regs.a | (cpu.regs.f ^ cpu.regs.q);
+        let q_xy2 = q_formula_val2 & 0x28;
+
+        // Q-factor formula ORs in the old X/Y bits, simple does not
+        assert_ne!(
+            simple_xy, q_xy2,
+            "Q-factor differs from simple when F has X/Y set"
+        );
     }
 }

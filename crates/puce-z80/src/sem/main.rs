@@ -6,6 +6,7 @@
 use super::regs::{hl, r8, rp, set_f, set_hl, set_r8, set_rp};
 use crate::alu;
 use crate::cpu::Cpu;
+use crate::regs::flag;
 
 /// Execute main-table instruction semantics.
 pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
@@ -211,5 +212,107 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
             set_r8(cpu, 7, res);
         }
         set_f(cpu, new_f);
+    }
+
+    // Accumulator operations family (opcodes with x=0, z=7): RLCA RRCA RLA RRA DAA CPL SCF CCF
+    if x == 0 && z == 7 {
+        let a = cpu.regs.a;
+        let old_f = cpu.regs.f;
+
+        match y {
+            // RLCA: rotate left through carry (bit 7 -> bit 0 and carry)
+            0 => {
+                let c_out = (a >> 7) & 1;
+                let res = (a << 1) | c_out;
+                cpu.regs.a = res;
+                // S Z P/V unchanged, H=N=0, C=c_out, X Y from result
+                let mut flags = old_f & (flag::S | flag::Z | flag::PV);
+                flags |= res & 0x28; // X Y from result
+                if c_out != 0 {
+                    flags |= flag::C;
+                }
+                set_f(cpu, flags);
+            }
+
+            // RRCA: rotate right through carry (bit 0 -> bit 7 and carry)
+            1 => {
+                let c_out = a & 1;
+                let res = (a >> 1) | (c_out << 7);
+                cpu.regs.a = res;
+                // S Z P/V unchanged, H=N=0, C=c_out, X Y from result
+                let mut flags = old_f & (flag::S | flag::Z | flag::PV);
+                flags |= res & 0x28; // X Y from result
+                if c_out != 0 {
+                    flags |= flag::C;
+                }
+                set_f(cpu, flags);
+            }
+
+            // RLA: rotate left through carry (carry -> bit 0, bit 7 -> carry)
+            2 => {
+                let c_in = old_f & 1;
+                let c_out = (a >> 7) & 1;
+                let res = (a << 1) | c_in;
+                cpu.regs.a = res;
+                // S Z P/V unchanged, H=N=0, C=c_out, X Y from result
+                let mut flags = old_f & (flag::S | flag::Z | flag::PV);
+                flags |= res & 0x28; // X Y from result
+                if c_out != 0 {
+                    flags |= flag::C;
+                }
+                set_f(cpu, flags);
+            }
+
+            // RRA: rotate right through carry (carry -> bit 7, bit 0 -> carry)
+            3 => {
+                let c_in = old_f & 1;
+                let c_out = a & 1;
+                let res = (a >> 1) | (c_in << 7);
+                cpu.regs.a = res;
+                // S Z P/V unchanged, H=N=0, C=c_out, X Y from result
+                let mut flags = old_f & (flag::S | flag::Z | flag::PV);
+                flags |= res & 0x28; // X Y from result
+                if c_out != 0 {
+                    flags |= flag::C;
+                }
+                set_f(cpu, flags);
+            }
+
+            // DAA: decimal adjust accumulator
+            4 => {
+                let (res, new_f) = alu::daa(a, old_f);
+                cpu.regs.a = res;
+                set_f(cpu, new_f);
+            }
+
+            // CPL: complement A (S Z P/V C unchanged, H=N=1, X Y from result)
+            5 => {
+                let res = !a;
+                cpu.regs.a = res;
+                let flags = (old_f & (flag::S | flag::Z | flag::PV | flag::C))
+                    | flag::H
+                    | flag::N
+                    | (res & 0x28);
+                set_f(cpu, flags);
+            }
+
+            // SCF: C=1, H=N=0, S Z P/V unchanged, X Y from A (reference model)
+            6 => {
+                let flags = (old_f & (flag::S | flag::Z | flag::PV)) | flag::C | (a & 0x28);
+                set_f(cpu, flags);
+            }
+
+            // CCF: H = old C, C = !old C, N=0, S Z P/V unchanged, X Y from A
+            7 => {
+                let c_or_h = if old_f & flag::C != 0 {
+                    flag::H
+                } else {
+                    flag::C
+                };
+                let flags = (old_f & (flag::S | flag::Z | flag::PV)) | c_or_h | (a & 0x28);
+                set_f(cpu, flags);
+            }
+            _ => {}
+        }
     }
 }
