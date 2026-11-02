@@ -460,4 +460,38 @@ mod tests {
         sem(&mut cpu, Table::Main, 0x04, 0); // INC B (doesn't affect carry)
         assert_eq!(cpu.regs.f & 1, 1, "INC preserves carry flag");
     }
+
+    #[test]
+    fn e05_08_inc_bc() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x1234);
+        sem(&mut cpu, Table::Main, 0x03, 0); // INC BC
+        assert_eq!(cpu.regs.bc(), 0x1235, "INC BC increments");
+    }
+
+    #[test]
+    fn e05_08_dec_sp() {
+        let mut cpu = Cpu::new();
+        cpu.regs.sp = 0x0000;
+        sem(&mut cpu, Table::Main, 0x3B, 0); // DEC SP
+        assert_eq!(cpu.regs.sp, 0xFFFF, "DEC SP wraps from 0 to FFFF");
+    }
+
+    #[test]
+    fn e05_08_add_hl_de() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1234);
+        cpu.regs.set_de(0x5678);
+        sem(&mut cpu, Table::Main, 0x19, 0); // ADD HL,DE
+        assert_eq!(cpu.regs.hl(), 0x68AC, "ADD HL,DE computes correct result");
+    }
+
+    #[test]
+    fn e05_08_add_hl_wz() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1234);
+        cpu.regs.set_de(0x0001);
+        sem(&mut cpu, Table::Main, 0x19, 0); // ADD HL,DE
+        assert_eq!(cpu.regs.wz, 0x1235, "WZ = HL+1 before addition");
+    }
 }

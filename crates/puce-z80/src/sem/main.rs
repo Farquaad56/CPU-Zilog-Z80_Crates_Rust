@@ -3,7 +3,7 @@
 //! Implements hooks for NOP, DI, EI, HALT, EX AF,AF', EXX, EX DE,HL,
 //! and all LD 8-bit register/register/immediate/(HL) instructions.
 
-use super::regs::{hl, r8, set_f, set_hl, set_r8, set_rp};
+use super::regs::{hl, r8, rp, set_f, set_hl, set_r8, set_rp};
 use crate::alu;
 use crate::cpu::Cpu;
 
@@ -162,5 +162,31 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
             set_r8(cpu, y, res);
             set_f(cpu, new_f);
         }
+    }
+
+    // INC rp family (opcodes with x=0, z=3, y even): increment register pair, no flags
+    if x == 0 && z == 3 && y & 1 == 0 {
+        let p = y >> 1;
+        let v = rp(cpu, p).wrapping_add(1);
+        set_rp(cpu, p, v);
+    }
+
+    // DEC rp family (opcodes with x=0, z=3, y odd): decrement register pair, no flags
+    if x == 0 && z == 3 && y & 1 != 0 {
+        let p = y >> 1;
+        let v = rp(cpu, p).wrapping_sub(1);
+        set_rp(cpu, p, v);
+    }
+
+    // ADD HL,rp family (opcodes with x=0, z=1, y odd): add register pair to HL with flags
+    if x == 0 && z == 1 && y & 1 != 0 {
+        let p = y >> 1;
+        let hl_before = hl(cpu);
+        let rp_val = rp(cpu, p);
+        // WZ = HL + 1 (before addition)
+        cpu.regs.wz = hl_before.wrapping_add(1);
+        let (res, new_f) = alu::add16(hl_before, rp_val, cpu.regs.f);
+        set_hl(cpu, res);
+        set_f(cpu, new_f);
     }
 }
