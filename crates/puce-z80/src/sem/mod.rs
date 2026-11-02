@@ -375,4 +375,57 @@ mod tests {
         );
         assert_eq!(cpu.eng.tmp_l, 0x99, "LD (nn),A stores A in tmp_l");
     }
+
+    #[test]
+    fn e05_06_ld_bc_nn() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x1234; // nn already read into WZ
+        sem(&mut cpu, Table::Main, 0x01, 0);
+        assert_eq!(cpu.regs.bc(), 0x1234, "LD BC,nn loads WZ");
+    }
+
+    #[test]
+    fn e05_06_ld_sp_nn() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x8000;
+        sem(&mut cpu, Table::Main, 0x31, 0);
+        assert_eq!(cpu.regs.sp, 0x8000, "LD SP,nn loads WZ");
+    }
+
+    #[test]
+    fn e05_06_ld_nn_hl() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1234);
+        sem(&mut cpu, Table::Main, 0x22, 0);
+        assert_eq!(cpu.eng.tmp_l, 0x34, "LD (nn),HL: TMP.L = L");
+        assert_eq!(cpu.eng.tmp_h, 0x12, "LD (nn),HL: TMP.H = H");
+    }
+
+    #[test]
+    fn e05_06_ld_hl_nn() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x2000;
+        cpu.eng.tmp_l = 0xCD;
+        cpu.eng.tmp_h = 0xAB;
+        sem(&mut cpu, Table::Main, 0x2A, 0);
+        assert_eq!(cpu.regs.hl(), 0xABCD, "LD HL,(nn) loads TMP");
+        assert_eq!(cpu.regs.wz, 0x2001, "LD HL,(nn): WZ = nn+1");
+    }
+
+    #[test]
+    fn e05_06_ld_sp_hl() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0xBEEF);
+        sem(&mut cpu, Table::Main, 0xF9, 0);
+        assert_eq!(cpu.regs.sp, 0xBEEF, "LD SP,HL copies HL");
+    }
+
+    #[test]
+    fn e05_06_add_hl_rp_untouched() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x4321;
+        cpu.regs.set_bc(0x1111);
+        sem(&mut cpu, Table::Main, 0x09, 0); // ADD HL,BC is not LD rp,nn
+        assert_eq!(cpu.regs.bc(), 0x1111, "ADD HL,BC must not load BC from WZ");
+    }
 }

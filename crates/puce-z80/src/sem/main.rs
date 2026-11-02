@@ -3,7 +3,7 @@
 //! Implements hooks for NOP, DI, EI, HALT, EX AF,AF', EXX, EX DE,HL,
 //! and all LD 8-bit register/register/immediate/(HL) instructions.
 
-use super::regs::{r8, set_r8};
+use super::regs::{hl, r8, set_hl, set_r8, set_rp};
 use crate::cpu::Cpu;
 
 /// Execute main-table instruction semantics.
@@ -55,6 +55,11 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
             cpu.regs.ex_de_hl();
         }
 
+        // LD SP,HL (0xF9): copy HL to SP
+        0xF9 => {
+            set_rp(cpu, 3, hl(cpu));
+        }
+
         _ => {}
     }
 
@@ -79,8 +84,14 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
         set_r8(cpu, y, cpu.eng.tmp_l);
     }
 
-    // LD (BC),A / LD A,(BC) / LD (DE),A / LD A,(DE) / LD (nn),A / LD A,(nn)
-    // All have x=0, z=2; distinguished by y.
+    // LD rp,nn family (opcodes with x=0, z=1): load register pair with immediate
+    // Only even y (q=0); odd y is ADD HL,rp, which has its own semantics.
+    if x == 0 && z == 1 && y & 1 == 0 {
+        let p = y >> 1;
+        set_rp(cpu, p, cpu.regs.wz);
+    }
+
+    // LD (nn),HL / LD HL,(nn) family (opcodes with x=0, z=2, y=4 or y=5)
     if x == 0 && z == 2 {
         match y {
             // LD (BC),A: store A at address in BC
@@ -113,6 +124,17 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
             // WZ (((nn+1)&0xFF)|(A<<8)) needs a post-write hook. See docs/qa/inbox/E05-05-Q1.md.
             6 => {
                 cpu.eng.tmp_l = cpu.regs.a;
+            }
+            // LD (nn),HL: store HL at absolute address nn
+            4 => {
+                cpu.eng.tmp_l = cpu.regs.l;
+                cpu.eng.tmp_h = cpu.regs.h;
+            }
+            // LD HL,(nn): load from absolute address nn into HL
+            5 => {
+                set_hl(cpu, ((cpu.eng.tmp_h as u16) << 8) | (cpu.eng.tmp_l as u16));
+                let nn_plus1 = cpu.regs.wz.wrapping_add(1);
+                cpu.regs.wz = nn_plus1;
             }
             // LD A,(nn): load from absolute address nn into A
             7 => {
