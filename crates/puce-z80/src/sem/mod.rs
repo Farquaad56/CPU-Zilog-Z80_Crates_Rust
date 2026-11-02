@@ -619,4 +619,32 @@ mod tests {
             "Q-factor differs from simple when F has X/Y set"
         );
     }
+
+    #[test]
+    fn e05_11_push_bc() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x1234);
+        sem(&mut cpu, Table::Main, 0xC5, 0);
+        assert_eq!(cpu.eng.tmp_h, 0x12, "PUSH BC: TMP.H = B");
+        assert_eq!(cpu.eng.tmp_l, 0x34, "PUSH BC: TMP.L = C");
+    }
+
+    #[test]
+    fn e05_11_pop_af() {
+        let mut cpu = Cpu::new();
+        cpu.eng.tmp_h = 0xAB;
+        cpu.eng.tmp_l = 0xD7;
+        sem(&mut cpu, Table::Main, 0xF1, 0);
+        assert_eq!(cpu.regs.a, 0xAB, "POP AF: A = TMP.H");
+        assert_eq!(cpu.regs.f, 0xD7, "POP AF: F = TMP.L");
+    }
+
+    #[test]
+    fn e05_11_pop_hl() {
+        let mut cpu = Cpu::new();
+        cpu.eng.tmp_h = 0x56;
+        cpu.eng.tmp_l = 0x78;
+        sem(&mut cpu, Table::Main, 0xE1, 0);
+        assert_eq!(cpu.regs.hl(), 0x5678, "POP HL loads TMP");
+    }
 }

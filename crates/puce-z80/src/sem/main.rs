@@ -3,7 +3,7 @@
 //! Implements hooks for NOP, DI, EI, HALT, EX AF,AF', EXX, EX DE,HL,
 //! and all LD 8-bit register/register/immediate/(HL) instructions.
 
-use super::regs::{hl, r8, rp, set_f, set_hl, set_r8, set_rp};
+use super::regs::{hl, r8, rp, rp2, set_f, set_hl, set_r8, set_rp, set_rp2};
 use crate::alu;
 use crate::cpu::Cpu;
 use crate::regs::flag;
@@ -313,6 +313,24 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
                 set_f(cpu, flags);
             }
             _ => {}
+        }
+    }
+
+    // PUSH rp2 (x=3, z=5, q=0): TMP = rp2(p); the plan writes TMP.H then TMP.L.
+    if x == 3 && z == 5 && y & 1 == 0 {
+        let v = rp2(cpu, y >> 1);
+        cpu.eng.tmp_h = (v >> 8) as u8;
+        cpu.eng.tmp_l = v as u8;
+    }
+
+    // POP rp2 (x=3, z=1, q=0): rp2(p) = TMP (AF: A = H, F = L).
+    if x == 3 && z == 1 && y & 1 == 0 {
+        let p = y >> 1;
+        if p == 3 {
+            cpu.regs.a = cpu.eng.tmp_h;
+            set_f(cpu, cpu.eng.tmp_l);
+        } else {
+            set_rp2(cpu, p, ((cpu.eng.tmp_h as u16) << 8) | cpu.eng.tmp_l as u16);
         }
     }
 }
