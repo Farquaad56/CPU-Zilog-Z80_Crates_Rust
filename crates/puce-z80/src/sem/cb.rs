@@ -181,4 +181,61 @@ mod tests {
         sem_cb(&mut cpu, 0xD0, 0); // SET 2,B (op=0xD0: x=3,y=2,z=0)
         assert_eq!(cpu.regs.b, 0x04, "SET 2 sets bit 2");
     }
+
+    #[test]
+    fn e06_02_bit_reg() {
+        // BIT 3,B with B=0x18 (bit 3 set) -> Z clear; B=0x0F (bit 3 clear) -> Z set
+        let mut cpu = Cpu::new();
+        cpu.regs.b = 0x18;
+        sem_cb(&mut cpu, 0x58, 0); // BIT 3,B (op=0x58: x=1,y=3,z=0)
+        assert_eq!(cpu.regs.f & flag::Z, 0, "BIT 3 of 0x18: Z clear (bit set)");
+
+        cpu.regs.b = 0x0F;
+        sem_cb(&mut cpu, 0x4C, 0); // BIT 3,B again
+        assert_eq!(
+            cpu.regs.f & flag::Z,
+            flag::Z,
+            "BIT 3 of 0x0F: Z set (bit clear)"
+        );
+    }
+
+    #[test]
+    fn e06_02_bit_hl_xy_from_wz() {
+        // BIT 0,(HL): X/Y flags come from high byte of WZ address, not the value
+        let mut cpu = Cpu::new();
+        cpu.eng.tmp_l = 0x01; // Value at (HL) has bit 0 set
+        cpu.regs.wz = 0xA800; // High byte 0xA8: bits 3 and 5 are both set -> X=1, Y=1
+        sem_cb(&mut cpu, 0x46, 0); // BIT 0,(HL) (op=0x46: x=1,y=0,z=6)
+        assert_eq!(cpu.regs.f & flag::Z, 0, "BIT 0 of 0x01: Z clear");
+        // X/Y from WZ high byte: 0xA8 = 1010 1000 -> bit 3=1 (Y), bit 5=1 (X)
+        assert_eq!(cpu.regs.f & flag::X, flag::X, "X flag from WZ high byte");
+        assert_eq!(cpu.regs.f & flag::Y, flag::Y, "Y flag from WZ high byte");
+    }
+
+    #[test]
+    fn e06_02_bit7_sign() {
+        // BIT 7,A with A=0x80: bit 7 set -> S flag should be set
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x80;
+        sem_cb(&mut cpu, 0x7F, 0); // BIT 7,A (op=0x7F: x=1,y=7,z=7)
+        assert_eq!(cpu.regs.f & flag::S, flag::S, "BIT 7 of 0x80: S set");
+        assert_eq!(cpu.regs.f & flag::Z, 0, "BIT 7 of 0x80: Z clear (bit set)");
+
+        cpu.regs.a = 0x7F;
+        sem_cb(&mut cpu, 0x7F, 0); // BIT 7,A again
+        assert_eq!(cpu.regs.f & flag::S, 0, "BIT 7 of 0x7F: S clear");
+    }
+
+    #[test]
+    fn e06_02_bit_no_write() {
+        // BIT (HL) should not write back to memory (no W phase in plan)
+        let mut cpu = Cpu::new();
+        cpu.eng.tmp_l = 0x42;
+        let original_tmp = cpu.eng.tmp_l;
+        sem_cb(&mut cpu, 0x46, 0); // BIT 0,(HL)
+        assert_eq!(
+            cpu.eng.tmp_l, original_tmp,
+            "BIT (HL) does not modify tmp_l"
+        );
+    }
 }
