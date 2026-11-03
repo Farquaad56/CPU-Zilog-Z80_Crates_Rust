@@ -3,7 +3,7 @@
 //! Implemented: IN r,(C) / IN (C), OUT (C),r / OUT (C),0 (E07-01),
 //! ADC HL,rp / SBC HL,rp (E07-02).
 
-use super::regs::{hl, r8, rp, set_f, set_hl, set_r8};
+use super::regs::{hl, r8, rp, set_f, set_hl, set_r8, set_rp};
 use crate::alu;
 use crate::cpu::Cpu;
 use crate::regs::flag;
@@ -23,6 +23,7 @@ pub(crate) fn sem_ed(cpu: &mut Cpu, op: u8, hook_no: u8) {
             0 => ed_in_c(cpu, y),
             1 => ed_out_c(cpu, y),
             2 => ed_adc_sbc_hl_rp(cpu, y),
+            3 => ed_ld_nn_rp(cpu, y),
             _ => {}
         }
     }
@@ -46,6 +47,27 @@ fn ed_adc_sbc_hl_rp(cpu: &mut Cpu, y: u8) {
     set_hl(cpu, res);
     set_f(cpu, flags);
     cpu.regs.wz = hl_before.wrapping_add(1);
+}
+
+/// ED: LD (nn),rp / LD rp,(nn) (z==3).
+/// p = y >> 1 selects the register pair; q = y & 1 selects store(0)/load(1).
+/// WZ is set to nn + 1 after the operation.
+fn ed_ld_nn_rp(cpu: &mut Cpu, y: u8) {
+    let p = y >> 1;
+    let q = y & 1;
+
+    if q == 0 {
+        // LD (nn),rp: store register pair at address nn
+        let v = rp(cpu, p);
+        cpu.eng.tmp_l = v as u8;
+        cpu.eng.tmp_h = (v >> 8) as u8;
+        // WZ stays at nn for the write; updated after by plan
+    } else {
+        // LD rp,(nn): load register pair from address nn
+        let v = ((cpu.eng.tmp_h as u16) << 8) | (cpu.eng.tmp_l as u16);
+        set_rp(cpu, p, v);
+        cpu.regs.wz = cpu.regs.wz.wrapping_add(1);
+    }
 }
 
 /// IN r,(C) (y != 6) and IN (C) (y == 6, value discarded).
@@ -182,5 +204,87 @@ mod tests {
         cpu2.regs.set_bc(0x0001);
         sem_ed(&mut cpu2, 0x4A, 0); // ADC HL,BC wraps
         assert_eq!(cpu2.regs.wz, 0x0000, "WZ wraps");
+    }
+
+    #[test]
+    fn e07_03_ld_nn_bc() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x1234);
+        sem_ed(&mut cpu, 0x43, 0); // ED 43: LD (nn),BC
+        assert_eq!(cpu.eng.tmp_l, 0x34, "LD (nn),BC stores low byte");
+        assert_eq!(cpu.eng.tmp_h, 0x12, "LD (nn),BC stores high byte");
+    }
+
+    #[test]
+    fn e07_03_ld_sp_nn() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x2000;
+        cpu.eng.tmp_l = 0xCD;
+        cpu.eng.tmp_h = 0xAB;
+        sem_ed(&mut cpu, 0x7B, 0); // ED 7B: LD SP,(nn)
+        assert_eq!(cpu.regs.sp, 0xABCD, "LD SP,(nn) loads from memory");
+    }
+
+    #[test]
+    fn e07_03_ld_nn_hl_ed() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x5678);
+        sem_ed(&mut cpu, 0x63, 0); // ED 63: LD (nn),HL
+        assert_eq!(cpu.eng.tmp_l, 0x78, "LD (nn),HL stores low byte");
+        assert_eq!(cpu.eng.tmp_h, 0x56, "LD (nn),HL stores high byte");
+    }
+
+    #[test]
+    fn e07_03_wz() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x1234;
+        cpu.regs.set_bc(0xABCD);
+        sem_ed(&mut cpu, 0x43, 0); // ED 43: LD (nn),BC
+        assert_eq!(cpu.regs.wz, 0x1234, "WZ unchanged in hook for store");
+
+        let mut cpu2 = Cpu::new();
+        cpu2.regs.wz = 0xFFFF;
+        cpu2.eng.tmp_l = 0x00;
+        cpu2.eng.tmp_h = 0x00;
+        sem_ed(&mut cpu2, 0x4B, 0); // ED 4B: LD BC,(nn)
+        assert_eq!(cpu2.regs.wz, 0x0000, "WZ wraps after load");
+    }
+
+    #[test]
+    fn e07_03_ld_de_nn() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_de(0x9ABC);
+        sem_ed(&mut cpu, 0x53, 0); // ED 53: LD (nn),DE
+        assert_eq!(cpu.eng.tmp_l, 0xBC, "LD (nn),DE stores low byte");
+        assert_eq!(cpu.eng.tmp_h, 0x9A, "LD (nn),DE stores high byte");
+    }
+
+    #[test]
+    fn e07_03_ld_bc_nn() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x3000;
+        cpu.eng.tmp_l = 0xEF;
+        cpu.eng.tmp_h = 0xCD;
+        sem_ed(&mut cpu, 0x4B, 0); // ED 4B: LD BC,(nn)
+        assert_eq!(cpu.regs.bc(), 0xCDEF, "LD BC,(nn) loads from memory");
+    }
+
+    #[test]
+    fn e07_03_ld_hl_nn() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x4000;
+        cpu.eng.tmp_l = 0x12;
+        cpu.eng.tmp_h = 0x34;
+        sem_ed(&mut cpu, 0x6B, 0); // ED 6B: LD HL,(nn)
+        assert_eq!(cpu.regs.hl(), 0x3412, "LD HL,(nn) loads from memory");
+    }
+
+    #[test]
+    fn e07_03_ld_nn_sp() {
+        let mut cpu = Cpu::new();
+        cpu.regs.sp = 0xFFFE;
+        sem_ed(&mut cpu, 0x73, 0); // ED 73: LD (nn),SP
+        assert_eq!(cpu.eng.tmp_l, 0xFE, "LD (nn),SP stores low byte");
+        assert_eq!(cpu.eng.tmp_h, 0xFF, "LD (nn),SP stores high byte");
     }
 }
