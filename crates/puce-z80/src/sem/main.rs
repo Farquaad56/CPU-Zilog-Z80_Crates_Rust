@@ -63,6 +63,36 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
             set_rp(cpu, 3, hl(cpu));
         }
 
+        // EX (SP),HL (0xE3): X0: TMP = HL; HL = WZ (value read from stack).
+        // The plan reads [SP] into Z and [SP+1] into W before this hook.
+        // After the hook, the plan writes TMP.H to [SP+1] and TMP.L to [SP].
+        0xE3 => {
+            let hl_val = hl(cpu);
+            cpu.eng.tmp_h = (hl_val >> 8) as u8;
+            cpu.eng.tmp_l = hl_val as u8;
+            set_hl(cpu, cpu.regs.wz);
+        }
+
+        // IN A,(n) (0xDB): X0: A = TMP.L (input byte from bus); WZ = ((A_before<<8)|n)+1.
+        // The plan reads port number n into Z and performs the input via N4 before this hook.
+        0xDB => {
+            let a_before = cpu.regs.a;
+            let n = (cpu.regs.wz & 0xFF) as u8;
+            cpu.regs.a = cpu.eng.tmp_l;
+            let wz_val: u16 = ((a_before as u16) << 8) | (n as u16);
+            cpu.regs.wz = wz_val.wrapping_add(1);
+        }
+
+        // OUT (n),A (0xD3): X0: TMP.L = A; WZ = ((n+1)&0xFF) | (A<<8).
+        // The plan reads port number n into Z before this hook, then outputs via O4.
+        0xD3 => {
+            // UNKNOWN - to confirm: the port address low byte is read from Z at O4,
+            // after this hook, so Z must stay n here. Final Z = n+1 needs a post-bus
+            // hook (see docs/qa/inbox/E05-05-Q1.md). W = A is already final.
+            cpu.eng.tmp_l = cpu.regs.a;
+            cpu.regs.wz = (cpu.regs.wz & 0x00FF) | ((cpu.regs.a as u16) << 8);
+        }
+
         _ => {}
     }
 
@@ -610,5 +640,72 @@ mod tests {
         sem_main_x1(&mut cpu, 0xFF);
         assert_eq!(cpu.regs.pc, 0x38);
         assert_eq!(cpu.regs.wz, 0x38);
+    }
+
+    #[test]
+    fn e05_15_ex_sp_hl() {
+        // EX (SP),HL: swap HL with word at [SP].
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1234);
+        cpu.regs.sp = 0xFFFE;
+        // Simulate plan reading [SP] into Z and [SP+1] into W (WZ = value at stack)
+        cpu.regs.wz = 0xABCD;
+
+        // X0: TMP = HL, HL = WZ
+        sem_main(&mut cpu, 0xE3, 0);
+        assert_eq!(cpu.eng.tmp_h, 0x12);
+        assert_eq!(cpu.eng.tmp_l, 0x34);
+        assert_eq!(cpu.regs.hl(), 0xABCD);
+
+        // X1: nothing
+        sem_main_x1(&mut cpu, 0xE3);
+    }
+
+    #[test]
+    fn e05_15_in_a_n() {
+        // IN A,(n): read from port n into A.
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x00;
+        cpu.regs.wz = 0x42; // port number n in Z (low byte of WZ)
+        cpu.eng.tmp_l = 0xFF; // input byte from bus (simulated)
+
+        sem_main(&mut cpu, 0xDB, 0);
+        assert_eq!(cpu.regs.a, 0xFF);
+    }
+
+    #[test]
+    fn e05_15_out_n_a() {
+        // OUT (n),A: write A to port n.
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x55;
+        cpu.regs.wz = 0x3C; // port number n in Z
+
+        sem_main(&mut cpu, 0xD3, 0);
+        assert_eq!(cpu.eng.tmp_l, 0x55);
+    }
+
+    #[test]
+    fn e05_15_wz_in() {
+        // WZ formula for IN A,(n): ((A_before<<8)|n)+1.
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x12;
+        cpu.regs.wz = 0x34; // port n in Z
+        cpu.eng.tmp_l = 0xFF;
+
+        sem_main(&mut cpu, 0xDB, 0);
+        // WZ = ((0x12 << 8) | 0x34) + 1 = 0x1235
+        assert_eq!(cpu.regs.wz, 0x1235);
+    }
+
+    #[test]
+    fn e05_15_wz_out() {
+        // WZ for OUT (n),A: W = A (final); Z = n (see UNKNOWN below).
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x56;
+        cpu.regs.wz = 0x7F; // port n in Z
+
+        sem_main(&mut cpu, 0xD3, 0);
+        // UNKNOWN - to confirm: Z stays n (0x7F) until a post-bus hook exists; W = A.
+        assert_eq!(cpu.regs.wz, 0x567F);
     }
 }
