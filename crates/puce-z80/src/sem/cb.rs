@@ -238,4 +238,55 @@ mod tests {
             "BIT (HL) does not modify tmp_l"
         );
     }
+
+    #[test]
+    fn e06_03_res_b() {
+        // RES 3,B: clear bit 3 of B (bit 3 = value 8)
+        let mut cpu = Cpu::new();
+        cpu.regs.b = 0xFF; // All bits set
+        sem_cb(&mut cpu, 0x98, 0); // RES 3,B (op=0x98: x=2,y=3,z=0)
+        assert_eq!(cpu.regs.b, 0xF7, "RES 3 clears bit 3");
+    }
+
+    #[test]
+    fn e06_03_set_a() {
+        // SET 7,A: set bit 7 of A
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x00;
+        sem_cb(&mut cpu, 0xFF, 0); // SET 7,A (op=0xFF: x=3,y=7,z=7)
+        assert_eq!(cpu.regs.a, 0x80, "SET 7 sets bit 7");
+    }
+
+    #[test]
+    fn e06_03_res_hl() {
+        // RES 0,(HL): clear bit 0 via tmp_l
+        let mut cpu = Cpu::new();
+        cpu.eng.tmp_l = 0xFF;
+        sem_cb(&mut cpu, 0x86, 0); // RES 0,(HL) (op=0x86: x=2,y=0,z=6)
+        assert_eq!(cpu.eng.tmp_l, 0xFE, "RES 0 clears bit 0 in tmp_l");
+    }
+
+    #[test]
+    fn e06_03_flags_kept() {
+        // RES/SET must not modify flags
+        let mut cpu = Cpu::new();
+        cpu.regs.b = 0xFF;
+        cpu.regs.f = flag::S | flag::Z | flag::PV | flag::N | flag::C;
+        sem_cb(&mut cpu, 0x98, 0); // RES 3,B (op=0x98: x=2,y=3,z=0)
+        assert_eq!(
+            cpu.regs.f,
+            flag::S | flag::Z | flag::PV | flag::N | flag::C,
+            "RES preserves flags"
+        );
+
+        let mut cpu2 = Cpu::new();
+        cpu2.regs.a = 0x00;
+        cpu2.regs.f = flag::S | flag::Z | flag::PV | flag::N | flag::C;
+        sem_cb(&mut cpu2, 0xFF, 0); // SET 7,A (op=0xFF: x=3,y=7,z=7)
+        assert_eq!(
+            cpu2.regs.f,
+            flag::S | flag::Z | flag::PV | flag::N | flag::C,
+            "SET preserves flags"
+        );
+    }
 }
