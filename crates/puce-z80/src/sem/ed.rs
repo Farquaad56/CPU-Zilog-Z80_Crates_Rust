@@ -1,8 +1,9 @@
 //! ED prefix table semantics.
 //!
-//! Implemented so far: IN r,(C) / IN (C) and OUT (C),r / OUT (C),0 (E07-01).
+//! Implemented: IN r,(C) / IN (C), OUT (C),r / OUT (C),0 (E07-01),
+//! ADC HL,rp / SBC HL,rp (E07-02).
 
-use super::regs::{r8, set_f, set_r8};
+use super::regs::{hl, r8, rp, set_f, set_hl, set_r8};
 use crate::alu;
 use crate::cpu::Cpu;
 use crate::regs::flag;
@@ -21,9 +22,30 @@ pub(crate) fn sem_ed(cpu: &mut Cpu, op: u8, hook_no: u8) {
         match z {
             0 => ed_in_c(cpu, y),
             1 => ed_out_c(cpu, y),
+            2 => ed_adc_sbc_hl_rp(cpu, y),
             _ => {}
         }
     }
+}
+
+/// ADC HL,rp / SBC HL,rp (z==2).
+/// p = y >> 1 selects the register pair; q = y & 1 selects ADC(1)/SBC(0).
+/// WZ is set to HL_before + 1.
+fn ed_adc_sbc_hl_rp(cpu: &mut Cpu, y: u8) {
+    let p = y >> 1;
+    let q = y & 1;
+    let hl_before = hl(cpu);
+    let rp_val = rp(cpu, p);
+
+    let (res, flags) = if q == 1 {
+        alu::adc16(hl_before, rp_val, cpu.regs.f)
+    } else {
+        alu::sbc16(hl_before, rp_val, cpu.regs.f)
+    };
+
+    set_hl(cpu, res);
+    set_f(cpu, flags);
+    cpu.regs.wz = hl_before.wrapping_add(1);
 }
 
 /// IN r,(C) (y != 6) and IN (C) (y == 6, value discarded).
@@ -101,5 +123,64 @@ mod tests {
         cpu.regs.set_bc(0xFFFF);
         sem_ed(&mut cpu, 0x41, 0); // OUT (C),B
         assert_eq!(cpu.regs.wz, 0x0000, "OUT: WZ = BC + 1 wraps");
+    }
+
+    #[test]
+    fn e07_02_adc_hl_bc() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1234);
+        cpu.regs.set_bc(0x5678);
+        cpu.regs.f = 0; // no carry
+        sem_ed(&mut cpu, 0x4A, 0); // ADC HL,BC
+        assert_eq!(cpu.regs.hl(), 0x68AC, "ADC HL,BC result");
+        assert_eq!(cpu.regs.f & flag::C, 0, "no carry out");
+    }
+
+    #[test]
+    fn e07_02_adc_hl_bc_carry() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0xFFFF);
+        cpu.regs.set_bc(0x0001);
+        cpu.regs.f = flag::C; // carry in
+        sem_ed(&mut cpu, 0x4A, 0); // ADC HL,BC with carry
+        assert_eq!(cpu.regs.hl(), 0x0001, "ADC wraps");
+        assert_eq!(cpu.regs.f & flag::C, flag::C, "carry out set");
+    }
+
+    #[test]
+    fn e07_02_sbc_hl_hl() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1234);
+        cpu.regs.f = 0; // no borrow
+        sem_ed(&mut cpu, 0x62, 0); // SBC HL,HL
+        assert_eq!(cpu.regs.hl(), 0x0000, "SBC HL,HL = 0");
+        assert_eq!(cpu.regs.f & flag::Z, flag::Z, "zero flag set");
+        assert_eq!(cpu.regs.f & flag::N, flag::N, "N flag set for SBC");
+    }
+
+    #[test]
+    fn e07_02_sbc_sp() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1000);
+        cpu.regs.sp = 0x0FFF;
+        cpu.regs.f = flag::C; // borrow in
+        sem_ed(&mut cpu, 0x72, 0); // SBC HL,SP with borrow
+        assert_eq!(cpu.regs.hl(), 0x0000, "SBC HL,SP result");
+        assert_eq!(cpu.regs.f & flag::C, 0, "no borrow out");
+    }
+
+    #[test]
+    fn e07_02_wz() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1234);
+        cpu.regs.set_bc(0x5678);
+        sem_ed(&mut cpu, 0x4A, 0); // ADC HL,BC
+        assert_eq!(cpu.regs.wz, 0x1235, "WZ = HL_before + 1");
+
+        let mut cpu2 = Cpu::new();
+        cpu2.regs.set_hl(0xFFFF);
+        cpu2.regs.set_bc(0x0001);
+        sem_ed(&mut cpu2, 0x4A, 0); // ADC HL,BC wraps
+        assert_eq!(cpu2.regs.wz, 0x0000, "WZ wraps");
     }
 }
