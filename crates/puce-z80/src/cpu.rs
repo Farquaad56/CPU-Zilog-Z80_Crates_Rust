@@ -602,7 +602,7 @@ mod tests {
         let plan = Box::leak(Box::new([Tok::new(Kind::N, 4, Addr::An, Reg::L, false)]));
         let mut cpu = Cpu::new();
         cpu.regs.a = 0x12;
-        cpu.eng.tmp_l = 0x34;
+        cpu.regs.wz = 0x0034; // port number n in Z
         cpu.start_plan(plan);
 
         // Tick 1 (t=0): port address on bus
@@ -869,7 +869,7 @@ mod tests {
         let plan = Box::leak(Box::new([Tok::new(Kind::N, 4, Addr::An, Reg::L, false)]));
         let mut cpu = Cpu::new();
         cpu.regs.a = 0x12;
-        cpu.eng.tmp_l = 0x34;
+        cpu.regs.wz = 0x0034; // port number n in Z
         cpu.start_plan(plan);
 
         // Tick 1 (t=0): port address on bus
