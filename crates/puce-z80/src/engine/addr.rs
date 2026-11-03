@@ -64,7 +64,7 @@ pub(crate) fn resolve(cpu: &mut Cpu, a: Addr, port: bool) -> u16 {
 
         Addr::An => {
             if port {
-                ((cpu.regs.a as u16) << 8) | (cpu.eng.tmp_l as u16)
+                ((cpu.regs.a as u16) << 8) | (cpu.regs.wz & 0x00FF)
             } else {
                 // AN without port context: use WZ low byte as fallback
                 cpu.regs.wz
@@ -172,7 +172,7 @@ mod tests {
     fn e03_05_an_port() {
         let mut cpu = make_cpu();
         cpu.regs.a = 0x12;
-        cpu.eng.tmp_l = 0x34;
+        cpu.regs.wz = 0x0034; // port number n was read into Z
 
         let addr = resolve(&mut cpu, Addr::An, true);
         assert_eq!(addr, 0x1234);
