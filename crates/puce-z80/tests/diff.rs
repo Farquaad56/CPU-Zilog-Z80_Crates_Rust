@@ -658,3 +658,59 @@ fn e05_01_diff_run() {
 
     println!("All {} vectors passed", rows.len());
 }
+
+/// E05-16: Run all 1512 vectors from the main table.
+#[test]
+fn e05_16_main_all() {
+    let rows = filtered_rows("main", "", "");
+    assert_eq!(rows.len(), 1512, "Expected 1512 main table vectors");
+
+    println!("Running {} differential vectors (main table)", rows.len());
+
+    let mut failures = Vec::new();
+    for (i, (table, opcode, vec, row)) in rows.iter().enumerate() {
+        match run_vector(table, *opcode, *vec) {
+            Ok((cpu, bus)) => {
+                if let Err(e) = compare_vector(table, *opcode, *vec, row, &cpu, &bus) {
+                    failures.push(format!(
+                        "[{}/{}] {} {:02X} vec{}: {}",
+                        i + 1,
+                        rows.len(),
+                        table,
+                        opcode,
+                        vec,
+                        e
+                    ));
+                }
+            }
+            Err(e) => {
+                failures.push(format!(
+                    "[{}/{}] {} {:02X} vec{}: run failed: {}",
+                    i + 1,
+                    rows.len(),
+                    table,
+                    opcode,
+                    vec,
+                    e
+                ));
+            }
+        }
+
+        if (i + 1) % 100 == 0 {
+            println!("Progress: {}/{}", i + 1, rows.len());
+        }
+    }
+
+    if !failures.is_empty() {
+        println!("\n{} failures:", failures.len());
+        for f in &failures[..20.min(failures.len())] {
+            println!("  {}", f);
+        }
+        if failures.len() > 20 {
+            println!("  ... and {} more", failures.len() - 20);
+        }
+        panic!("Differential test failed");
+    }
+
+    println!("All {} main table vectors passed", rows.len());
+}
