@@ -8,6 +8,9 @@ use crate::alu;
 use crate::cpu::Cpu;
 use crate::regs::flag;
 
+/// IM mode table: [0,0,1,2,0,0,1,2] indexed by y.
+const IM_TABLE: [u8; 8] = [0, 0, 1, 2, 0, 0, 1, 2];
+
 /// Execute ED-prefix instruction semantics.
 pub(crate) fn sem_ed(cpu: &mut Cpu, op: u8, hook_no: u8) {
     if hook_no != 0 {
@@ -24,7 +27,19 @@ pub(crate) fn sem_ed(cpu: &mut Cpu, op: u8, hook_no: u8) {
             1 => ed_out_c(cpu, y),
             2 => ed_adc_sbc_hl_rp(cpu, y),
             3 => ed_ld_nn_rp(cpu, y),
-            _ => {}
+            4 => ed_neg(cpu),
+            5 => ed_retn(cpu),
+            6 => ed_im(cpu, y),
+            7 => match y {
+                0 => ed_ld_i_a(cpu),
+                1 => ed_ld_r_a(cpu),
+                2 => ed_ld_a_i(cpu),
+                3 => ed_ld_a_r(cpu),
+                4 => ed_rrd(cpu),
+                5 => ed_rld(cpu),
+                _ => {} // ED NOP (y=6,7)
+            },
+            _ => {} // Other ED opcodes not yet implemented
         }
     }
 }
@@ -90,6 +105,117 @@ fn ed_in_c(cpu: &mut Cpu, y: u8) {
 fn ed_out_c(cpu: &mut Cpu, y: u8) {
     cpu.eng.tmp_l = if y == 6 { 0 } else { r8(cpu, y) };
     cpu.regs.wz = cpu.regs.bc().wrapping_add(1);
+}
+
+/// NEG (ED 44): two's complement negate of A.
+/// Flags: S,Z,Y,X from result; H=(A^res)&H; PV if A==0x80; N=1; C if A!=0.
+fn ed_neg(cpu: &mut Cpu) {
+    let a = cpu.regs.a;
+    let (res, flags) = alu::neg(a);
+    cpu.regs.a = res;
+    set_f(cpu, flags);
+}
+
+/// RETN / RETI (ED 45 / ED 4D): return from interrupt.
+/// Plan has already popped the address into WZ. Hook sets PC=WZ and IFF1=IFF2.
+fn ed_retn(cpu: &mut Cpu) {
+    cpu.regs.pc = cpu.regs.wz;
+    cpu.regs.iff1 = cpu.regs.iff2;
+}
+
+/// IM n (ED 46/4E/56/5E/66/6E/76/7E): set interrupt mode.
+/// IM = [0,0,1,2,0,0,1,2][y].
+fn ed_im(cpu: &mut Cpu, y: u8) {
+    cpu.regs.im = IM_TABLE[y as usize];
+}
+
+/// LD I,A (ED 47): copy A to interrupt vector register.
+fn ed_ld_i_a(cpu: &mut Cpu) {
+    cpu.regs.i = cpu.regs.a;
+}
+
+/// LD R,A (ED 4F): copy A to refresh register.
+fn ed_ld_r_a(cpu: &mut Cpu) {
+    cpu.regs.r = cpu.regs.a;
+}
+
+/// LD A,I (ED 57): load interrupt vector into A, set flags.
+/// Flags: S,Z,Y,X from value; H=N=0; PV=IFF2; C unchanged.
+fn ed_ld_a_i(cpu: &mut Cpu) {
+    let v = cpu.regs.i;
+    cpu.regs.a = v;
+    let mut flags = (cpu.regs.f & flag::C) | (v & 0xA8);
+    if v == 0 {
+        flags |= flag::Z;
+    }
+    if cpu.regs.iff2 {
+        flags |= flag::PV;
+    }
+    set_f(cpu, flags);
+}
+
+/// LD A,R (ED 5F): load refresh register into A, set flags.
+/// Same flag behavior as LD A,I.
+fn ed_ld_a_r(cpu: &mut Cpu) {
+    let v = cpu.regs.r;
+    cpu.regs.a = v;
+    let mut flags = (cpu.regs.f & flag::C) | (v & 0xA8);
+    if v == 0 {
+        flags |= flag::Z;
+    }
+    if cpu.regs.iff2 {
+        flags |= flag::PV;
+    }
+    set_f(cpu, flags);
+}
+
+/// RRD (ED 67): rotate right deposit.
+/// Memory at HL is rotated right by 4 bits into A's low nibble;
+/// A's high nibble goes to memory's high nibble.
+/// Plan reads memory into tmp_l before hook; hook writes new value back via tmp_l.
+fn ed_rrd(cpu: &mut Cpu) {
+    let m = cpu.eng.tmp_l; // byte read from (HL)
+    let a = cpu.regs.a;
+    // New memory byte: high nibble from A's low nibble, low nibble from old memory's high nibble
+    let new_mem = ((a & 0x0F) << 4) | (m >> 4);
+    // New A: high nibble unchanged, low nibble from old memory's low nibble
+    let new_a = (a & 0xF0) | (m & 0x0F);
+    cpu.regs.a = new_a;
+    cpu.eng.tmp_l = new_mem; // will be written back to (HL) by plan
+
+    // Flags: S,Z,Y,X from new A; H=N=0; PV=parity(new A); C unchanged
+    let mut flags = (cpu.regs.f & flag::C) | (new_a & 0xA8);
+    if new_a == 0 {
+        flags |= flag::Z;
+    }
+    flags |= alu::parity(new_a);
+    set_f(cpu, flags);
+
+    cpu.regs.wz = hl(cpu).wrapping_add(1);
+}
+
+/// RLD (ED 6F): rotate left deposit.
+/// Memory at HL is rotated left by 4 bits into A's low nibble;
+/// A's low nibble goes to memory's low nibble.
+fn ed_rld(cpu: &mut Cpu) {
+    let m = cpu.eng.tmp_l; // byte read from (HL)
+    let a = cpu.regs.a;
+    // New memory byte: high nibble from old memory's low nibble, low nibble from A's low nibble
+    let new_mem = ((m & 0x0F) << 4) | (a & 0x0F);
+    // New A: high nibble unchanged, low nibble from old memory's high nibble
+    let new_a = (a & 0xF0) | (m >> 4);
+    cpu.regs.a = new_a;
+    cpu.eng.tmp_l = new_mem; // will be written back to (HL) by plan
+
+    // Flags: S,Z,Y,X from new A; H=N=0; PV=parity(new A); C unchanged
+    let mut flags = (cpu.regs.f & flag::C) | (new_a & 0xA8);
+    if new_a == 0 {
+        flags |= flag::Z;
+    }
+    flags |= alu::parity(new_a);
+    set_f(cpu, flags);
+
+    cpu.regs.wz = hl(cpu).wrapping_add(1);
 }
 
 #[cfg(test)]
@@ -286,5 +412,176 @@ mod tests {
         sem_ed(&mut cpu, 0x73, 0); // ED 73: LD (nn),SP
         assert_eq!(cpu.eng.tmp_l, 0xFE, "LD (nn),SP stores low byte");
         assert_eq!(cpu.eng.tmp_h, 0xFF, "LD (nn),SP stores high byte");
+    }
+
+    #[test]
+    fn e07_04_neg() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x12;
+        sem_ed(&mut cpu, 0x44, 0); // ED 44: NEG
+        assert_eq!(cpu.regs.a, 0xEE, "NEG of 0x12 is 0xEE");
+        assert_eq!(cpu.regs.f & flag::N, flag::N, "N set for NEG");
+        assert_eq!(cpu.regs.f & flag::C, flag::C, "C set when A != 0");
+
+        // Edge case: NEG of 0x80 sets PV (overflow)
+        let mut cpu2 = Cpu::new();
+        cpu2.regs.a = 0x80;
+        sem_ed(&mut cpu2, 0x44, 0);
+        assert_eq!(cpu2.regs.a, 0x80, "NEG of 0x80 is 0x80");
+        assert_eq!(cpu2.regs.f & flag::PV, flag::PV, "PV set for NEG 0x80");
+
+        // Edge case: NEG of 0 gives Z and no C
+        let mut cpu3 = Cpu::new();
+        cpu3.regs.a = 0;
+        sem_ed(&mut cpu3, 0x44, 0);
+        assert_eq!(cpu3.regs.f & flag::Z, flag::Z, "Z set for NEG 0");
+        assert_eq!(cpu3.regs.f & flag::C, 0, "C not set for NEG 0");
+    }
+
+    #[test]
+    fn e07_04_retn_iff() {
+        let mut cpu = Cpu::new();
+        cpu.regs.wz = 0x1234; // return address already popped by plan
+        cpu.regs.iff1 = false;
+        cpu.regs.iff2 = true;
+        sem_ed(&mut cpu, 0x45, 0); // ED 45: RETN
+        assert_eq!(cpu.regs.pc, 0x1234, "RETN sets PC from WZ");
+        assert!(cpu.regs.iff1, "RETN copies IFF2 to IFF1");
+
+        // RETI (ED 4D) has same behavior
+        let mut cpu2 = Cpu::new();
+        cpu2.regs.wz = 0x5678;
+        cpu2.regs.iff1 = true;
+        cpu2.regs.iff2 = false;
+        sem_ed(&mut cpu2, 0x4D, 0); // ED 4D: RETI
+        assert_eq!(cpu2.regs.pc, 0x5678, "RETI sets PC from WZ");
+        assert!(!cpu2.regs.iff1, "RETI copies IFF2 to IFF1");
+    }
+
+    #[test]
+    fn e07_04_im_modes() {
+        // IM table: [0,0,1,2,0,0,1,2] indexed by y
+        let expected = [0u8, 0, 1, 2, 0, 0, 1, 2];
+        for (y, exp) in expected.iter().enumerate() {
+            let mut cpu = Cpu::new();
+            // ED IM opcodes: x=1, z=6, y varies -> op = 0x46 | (y << 3)
+            let op = 0x46 | ((y as u8) << 3);
+            sem_ed(&mut cpu, op, 0);
+            assert_eq!(
+                cpu.regs.im, *exp,
+                "IM mode {} for opcode ED {:02X}",
+                exp, op
+            );
+        }
+    }
+
+    #[test]
+    fn e07_04_ld_a_i_pv() {
+        let mut cpu = Cpu::new();
+        cpu.regs.i = 0x81; // odd parity value
+        cpu.regs.iff2 = true;
+        sem_ed(&mut cpu, 0x57, 0); // ED 57: LD A,I
+        assert_eq!(cpu.regs.a, 0x81, "LD A,I loads I into A");
+        assert_eq!(cpu.regs.f & flag::PV, flag::PV, "P/V = IFF2 (true)");
+        assert_eq!(cpu.regs.f & flag::S, flag::S, "S from bit 7 of value");
+
+        // With IFF2 false, PV should be clear
+        let mut cpu2 = Cpu::new();
+        cpu2.regs.i = 0x81;
+        cpu2.regs.iff2 = false;
+        sem_ed(&mut cpu2, 0x57, 0);
+        assert_eq!(cpu2.regs.f & flag::PV, 0, "P/V = IFF2 (false)");
+
+        // LD A,R has same behavior
+        let mut cpu3 = Cpu::new();
+        cpu3.regs.r = 0x45;
+        cpu3.regs.iff2 = true;
+        sem_ed(&mut cpu3, 0x5F, 0); // ED 5F: LD A,R
+        assert_eq!(cpu3.regs.a, 0x45, "LD A,R loads R into A");
+        assert_eq!(cpu3.regs.f & flag::PV, flag::PV, "P/V = IFF2 for LD A,R");
+    }
+
+    #[test]
+    fn e07_04_ld_i_a() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0xAB;
+        sem_ed(&mut cpu, 0x47, 0); // ED 47: LD I,A
+        assert_eq!(cpu.regs.i, 0xAB, "LD I,A copies A to I");
+    }
+
+    #[test]
+    fn e07_04_ld_r_a() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0xCD;
+        sem_ed(&mut cpu, 0x4F, 0); // ED 4F: LD R,A
+        assert_eq!(cpu.regs.r, 0xCD, "LD R,A copies A to R");
+    }
+
+    #[test]
+    fn e07_04_rrd() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x12;
+        cpu.eng.tmp_l = 0x34; // value read from (HL) by plan
+        sem_ed(&mut cpu, 0x67, 0); // ED 67: RRD
+
+        // Expected: new_mem = ((A&0xF)<<4)|(m>>4) = (0x02<<4)|0x03 = 0x23
+        // new_a = (A&0xF0)|(m&0x0F) = 0x10|0x04 = 0x14
+        assert_eq!(cpu.regs.a, 0x14, "RRD: A low nibble from memory low nibble");
+        assert_eq!(cpu.eng.tmp_l, 0x23, "RRD: new memory byte computed");
+
+        // Flags: S,Z,Y,X from new A; PV=parity(new A); C unchanged
+        let mut cpu2 = Cpu::new();
+        cpu2.regs.a = 0xF0;
+        cpu2.eng.tmp_l = 0x0F;
+        sem_ed(&mut cpu2, 0x67, 0);
+        assert_eq!(
+            cpu2.regs.a,
+            0xF0 | (0x0F & 0x0F),
+            "RRD preserves A high nibble"
+        );
+
+        // WZ = HL + 1
+        let mut cpu3 = Cpu::new();
+        cpu3.regs.set_hl(0x12FF);
+        cpu3.eng.tmp_l = 0;
+        sem_ed(&mut cpu3, 0x67, 0);
+        assert_eq!(cpu3.regs.wz, 0x1300, "RRD: WZ = HL + 1");
+    }
+
+    #[test]
+    fn e07_04_rld() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x12;
+        cpu.eng.tmp_l = 0x34; // value read from (HL) by plan
+        sem_ed(&mut cpu, 0x6F, 0); // ED 6F: RLD
+
+        // Expected: new_mem = ((m&0xF)<<4)|(A&0xF) = (0x04<<4)|0x02 = 0x42
+        // new_a = (A&0xF0)|(m>>4) = 0x10|0x03 = 0x13
+        assert_eq!(
+            cpu.regs.a, 0x13,
+            "RLD: A low nibble from memory high nibble"
+        );
+        assert_eq!(cpu.eng.tmp_l, 0x42, "RLD: new memory byte computed");
+
+        // WZ = HL + 1
+        let mut cpu2 = Cpu::new();
+        cpu2.regs.set_hl(0xFFFF);
+        cpu2.eng.tmp_l = 0;
+        sem_ed(&mut cpu2, 0x6F, 0);
+        assert_eq!(cpu2.regs.wz, 0x0000, "RLD: WZ wraps");
+    }
+
+    #[test]
+    fn e07_04_nop() {
+        // Undefined ED opcodes act as NOPs (no state change)
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x55;
+        sem_ed(&mut cpu, 0x00, 0); // ED 00: undefined -> NOP
+        assert_eq!(cpu.regs.a, 0x55, "ED 00 does not change A");
+
+        let mut cpu2 = Cpu::new();
+        cpu2.regs.a = 0xAA;
+        sem_ed(&mut cpu2, 0xFF, 0); // ED FF: undefined -> NOP
+        assert_eq!(cpu2.regs.a, 0xAA, "ED FF does not change A");
     }
 }
