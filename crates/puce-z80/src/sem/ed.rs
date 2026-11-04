@@ -13,13 +13,23 @@ const IM_TABLE: [u8; 8] = [0, 0, 1, 2, 0, 0, 1, 2];
 
 /// Execute ED-prefix instruction semantics.
 pub(crate) fn sem_ed(cpu: &mut Cpu, op: u8, hook_no: u8) {
-    if hook_no != 0 {
-        return;
-    }
-
     let x = op >> 6;
     let y = (op >> 3) & 7;
     let z = op & 7;
+
+    // Block LD / CP family (ED A0/A1/A8/A9/B0/B1/B8/B9): LDI LDD LDIR LDDR CPI CPD CPIR CPDR.
+    if x == 2 && y >= 4 && z < 2 {
+        if z == 0 {
+            ed_block_ld(cpu, y, hook_no);
+        } else {
+            ed_block_cp(cpu, y, hook_no);
+        }
+        return;
+    }
+
+    if hook_no != 0 {
+        return;
+    }
 
     if x == 1 {
         match z {
@@ -216,6 +226,76 @@ fn ed_rld(cpu: &mut Cpu) {
     set_f(cpu, flags);
 
     cpu.regs.wz = hl(cpu).wrapping_add(1);
+}
+
+/// Repeat step shared by LDxR / CPxR: PC = PC - 2, WZ = PC + 1 (new PC).
+fn block_repeat(cpu: &mut Cpu) {
+    cpu.regs.pc = cpu.regs.pc.wrapping_sub(2);
+    cpu.regs.wz = cpu.regs.pc.wrapping_add(1);
+    cpu.eng.cond = true;
+}
+
+/// LDI / LDD / LDIR / LDDR (y = 4..7, z = 0).
+/// X0: TMP.L = byte read from (HL); flags from (byte + A). The plan then writes TMP.L to (DE).
+/// X1: HL, DE +/-1, BC - 1; for the repeating forms with BC != 0, PC -= 2 and WZ = PC + 1.
+fn ed_block_ld(cpu: &mut Cpu, y: u8, hook_no: u8) {
+    let dec = y & 1 == 1;
+    let rep = y >= 6;
+    if hook_no == 0 {
+        let v = cpu.eng.tmp_l;
+        let n = v.wrapping_add(cpu.regs.a);
+        let bc_after = cpu.regs.bc().wrapping_sub(1);
+        let flags = (cpu.regs.f & (flag::S | flag::Z | flag::C))
+            | (n & flag::X)
+            | ((n & 0x02) << 4)
+            | if bc_after != 0 { flag::PV } else { 0 };
+        set_f(cpu, flags);
+    } else {
+        let step: u16 = if dec { 0xFFFF } else { 1 };
+        let hl_v = cpu.regs.hl().wrapping_add(step);
+        let de_v = cpu.regs.de().wrapping_add(step);
+        let bc_v = cpu.regs.bc().wrapping_sub(1);
+        cpu.regs.set_hl(hl_v);
+        cpu.regs.set_de(de_v);
+        cpu.regs.set_bc(bc_v);
+        if rep && bc_v != 0 {
+            block_repeat(cpu);
+        }
+    }
+}
+
+/// CPI / CPD / CPIR / CPDR (y = 4..7, z = 1).
+/// Single hook X0 (the plan has only X0, then I5 and conditional ?I5): TMP.L = byte at (HL);
+/// compare with A, HL +/-1, BC - 1, WZ +/-1; repeat when BC != 0 and no match.
+fn ed_block_cp(cpu: &mut Cpu, y: u8, hook_no: u8) {
+    if hook_no != 0 {
+        return;
+    }
+    let dec = y & 1 == 1;
+    let rep = y >= 6;
+    let v = cpu.eng.tmp_l;
+    let a = cpu.regs.a;
+    let res = a.wrapping_sub(v);
+    let h = (a ^ v ^ res) & flag::H;
+    let step: u16 = if dec { 0xFFFF } else { 1 };
+    let hl_v = cpu.regs.hl().wrapping_add(step);
+    let bc_v = cpu.regs.bc().wrapping_sub(1);
+    cpu.regs.set_hl(hl_v);
+    cpu.regs.set_bc(bc_v);
+    let n = res.wrapping_sub(if h != 0 { 1 } else { 0 });
+    let flags = (cpu.regs.f & flag::C)
+        | flag::N
+        | (res & flag::S)
+        | if res == 0 { flag::Z } else { 0 }
+        | h
+        | (n & flag::X)
+        | ((n & 0x02) << 4)
+        | if bc_v != 0 { flag::PV } else { 0 };
+    set_f(cpu, flags);
+    cpu.regs.wz = cpu.regs.wz.wrapping_add(step);
+    if rep && bc_v != 0 && res != 0 {
+        block_repeat(cpu);
+    }
 }
 
 #[cfg(test)]
@@ -583,5 +663,137 @@ mod tests {
         cpu2.regs.a = 0xAA;
         sem_ed(&mut cpu2, 0xFF, 0); // ED FF: undefined -> NOP
         assert_eq!(cpu2.regs.a, 0xAA, "ED FF does not change A");
+    }
+
+    #[test]
+    fn e07_05_ldi() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x01;
+        cpu.regs.f = flag::S | flag::C | flag::H | flag::N;
+        cpu.regs.set_hl(0x1000);
+        cpu.regs.set_de(0x2000);
+        cpu.regs.set_bc(0x0002);
+        cpu.eng.tmp_l = 0x08; // n = 0x09 -> X set, bit1 clear
+        sem_ed(&mut cpu, 0xA0, 0);
+        sem_ed(&mut cpu, 0xA0, 1);
+        assert_eq!(cpu.regs.hl(), 0x1001);
+        assert_eq!(cpu.regs.de(), 0x2001);
+        assert_eq!(cpu.regs.bc(), 0x0001);
+        assert_eq!(cpu.regs.f, flag::S | flag::C | flag::X | flag::PV);
+    }
+
+    #[test]
+    fn e07_05_lddr_repeat_sets_pc_wz() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1000);
+        cpu.regs.set_de(0x2000);
+        cpu.regs.set_bc(0x0002);
+        cpu.regs.pc = 0x0102;
+        cpu.eng.tmp_l = 0;
+        sem_ed(&mut cpu, 0xB8, 0);
+        sem_ed(&mut cpu, 0xB8, 1);
+        assert_eq!(cpu.regs.hl(), 0x0FFF);
+        assert_eq!(cpu.regs.de(), 0x1FFF);
+        assert_eq!(cpu.regs.pc, 0x0100);
+        assert_eq!(cpu.regs.wz, 0x0101);
+        assert!(cpu.eng.cond);
+    }
+
+    #[test]
+    fn e07_05_ldir_last() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x0001);
+        cpu.regs.pc = 0x0102;
+        sem_ed(&mut cpu, 0xB0, 0);
+        sem_ed(&mut cpu, 0xB0, 1);
+        assert_eq!(cpu.regs.bc(), 0);
+        assert_eq!(cpu.regs.pc, 0x0102);
+        assert!(!cpu.eng.cond);
+        assert_eq!(cpu.regs.f & flag::PV, 0);
+    }
+
+    #[test]
+    fn e07_05_cpir_stop_on_match() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x42;
+        cpu.regs.set_hl(0x3000);
+        cpu.regs.set_bc(0x0005);
+        cpu.regs.pc = 0x0102;
+        cpu.regs.wz = 0x0010;
+        cpu.eng.tmp_l = 0x42;
+        sem_ed(&mut cpu, 0xB1, 0);
+        assert_eq!(cpu.regs.hl(), 0x3001);
+        assert_eq!(cpu.regs.bc(), 0x0004);
+        assert_eq!(cpu.regs.wz, 0x0011);
+        assert_eq!(cpu.regs.pc, 0x0102);
+        assert!(!cpu.eng.cond);
+        assert_eq!(
+            cpu.regs.f & (flag::Z | flag::N | flag::PV),
+            flag::Z | flag::N | flag::PV
+        );
+    }
+
+    #[test]
+    fn e07_05_cpdr_repeat_on_mismatch() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x10;
+        cpu.regs.set_hl(0x3000);
+        cpu.regs.set_bc(0x0005);
+        cpu.regs.pc = 0x0202;
+        cpu.eng.tmp_l = 0x20;
+        sem_ed(&mut cpu, 0xB9, 0);
+        assert_eq!(cpu.regs.hl(), 0x2FFF);
+        assert_eq!(cpu.regs.pc, 0x0200);
+        assert_eq!(cpu.regs.wz, 0x0201);
+        assert!(cpu.eng.cond);
+    }
+
+    #[test]
+    fn e07_05_ldd() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1000);
+        cpu.regs.set_de(0x2000);
+        cpu.regs.set_bc(0x0001);
+        cpu.regs.pc = 0x0102;
+        sem_ed(&mut cpu, 0xA8, 0);
+        sem_ed(&mut cpu, 0xA8, 1);
+        assert_eq!(cpu.regs.hl(), 0x0FFF);
+        assert_eq!(cpu.regs.de(), 0x1FFF);
+        assert_eq!(cpu.regs.bc(), 0);
+        assert_eq!(cpu.regs.pc, 0x0102);
+    }
+
+    #[test]
+    fn e07_05_ldir_repeat() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_hl(0x1000);
+        cpu.regs.set_de(0x2000);
+        cpu.regs.set_bc(0x0003);
+        cpu.regs.pc = 0x0102;
+        sem_ed(&mut cpu, 0xB0, 0);
+        sem_ed(&mut cpu, 0xB0, 1);
+        assert_eq!(cpu.regs.hl(), 0x1001);
+        assert_eq!(cpu.regs.pc, 0x0100);
+        assert_eq!(cpu.regs.wz, 0x0101);
+        assert!(cpu.eng.cond);
+    }
+
+    #[test]
+    fn e07_05_cpi() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0x10;
+        cpu.regs.set_hl(0x3000);
+        cpu.regs.set_bc(0x0001);
+        cpu.regs.pc = 0x0102;
+        cpu.eng.tmp_l = 0x20;
+        sem_ed(&mut cpu, 0xA1, 0);
+        assert_eq!(cpu.regs.hl(), 0x3001);
+        assert_eq!(cpu.regs.bc(), 0);
+        assert_eq!(cpu.regs.pc, 0x0102);
+        assert_eq!(
+            cpu.regs.f & (flag::N | flag::C | flag::PV | flag::Z),
+            flag::N
+        );
+        assert_ne!(cpu.regs.f & flag::S, 0);
     }
 }
