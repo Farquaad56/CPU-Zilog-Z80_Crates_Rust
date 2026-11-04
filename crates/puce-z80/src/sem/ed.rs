@@ -27,6 +27,12 @@ pub(crate) fn sem_ed(cpu: &mut Cpu, op: u8, hook_no: u8) {
         return;
     }
 
+    // Block I/O family (ED A2/A3/AA/AB/B2/B3/BA/BB): INI IND OUTI OUTD and repeating forms.
+    if x == 2 && y >= 4 && (z == 2 || z == 3) {
+        ed_block_io(cpu, y, z, hook_no);
+        return;
+    }
+
     if hook_no != 0 {
         return;
     }
@@ -295,6 +301,46 @@ fn ed_block_cp(cpu: &mut Cpu, y: u8, hook_no: u8) {
     cpu.regs.wz = cpu.regs.wz.wrapping_add(step);
     if rep && bc_v != 0 && res != 0 {
         block_repeat(cpu);
+    }
+}
+
+/// INI / IND / OUTI / OUTD and INIR / INDR / OTIR / OTDR (y = 4..7, z = 2 IN, z = 3 OUT).
+/// X0: B - 1 and flags (IN: TMP.L is the byte read from port BC, before the decrement;
+/// OUT: TMP.L = (HL), the port address uses the decremented B). WZ follows BC.
+/// X1: HL +/-1; for the repeating forms with B != 0, PC -= 2 and WZ = PC + 1.
+fn ed_block_io(cpu: &mut Cpu, y: u8, z: u8, hook_no: u8) {
+    let dec = y & 1 == 1;
+    let rep = y >= 6;
+    let step: u16 = if dec { 0xFFFF } else { 1 };
+    if hook_no == 0 {
+        let v = cpu.eng.tmp_l;
+        let bc_before = cpu.regs.bc();
+        cpu.regs.b = cpu.regs.b.wrapping_sub(1);
+        let k: u16 = if z == 2 {
+            let c_step = if dec { 0xFFu8 } else { 1u8 };
+            v as u16 + cpu.regs.c.wrapping_add(c_step) as u16
+        } else {
+            let l_after = cpu.regs.hl().wrapping_add(step) as u8;
+            v as u16 + l_after as u16
+        };
+        let b = cpu.regs.b;
+        let flags = (b & (flag::S | flag::Y | flag::X))
+            | if b == 0 { flag::Z } else { 0 }
+            | if v & 0x80 != 0 { flag::N } else { 0 }
+            | if k > 255 { flag::H | flag::C } else { 0 }
+            | alu::parity(((k & 7) as u8) ^ b);
+        set_f(cpu, flags);
+        cpu.regs.wz = if z == 2 {
+            bc_before.wrapping_add(step)
+        } else {
+            cpu.regs.bc().wrapping_add(step)
+        };
+    } else {
+        let hl_v = cpu.regs.hl().wrapping_add(step);
+        cpu.regs.set_hl(hl_v);
+        if rep && cpu.regs.b != 0 {
+            block_repeat(cpu);
+        }
     }
 }
 
@@ -795,5 +841,86 @@ mod tests {
             flag::N
         );
         assert_ne!(cpu.regs.f & flag::S, 0);
+    }
+
+    #[test]
+    fn e07_06_ini() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x0210);
+        cpu.regs.set_hl(0x4000);
+        cpu.eng.tmp_l = 0x80;
+        sem_ed(&mut cpu, 0xA2, 0);
+        sem_ed(&mut cpu, 0xA2, 1);
+        assert_eq!(cpu.regs.b, 1);
+        assert_eq!(cpu.regs.hl(), 0x4001);
+        assert_ne!(cpu.regs.f & flag::N, 0);
+        assert_eq!(cpu.regs.wz, 0x0211);
+    }
+
+    #[test]
+    fn e07_06_ind() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x0110);
+        cpu.regs.set_hl(0x4000);
+        cpu.eng.tmp_l = 0x01;
+        sem_ed(&mut cpu, 0xAA, 0);
+        sem_ed(&mut cpu, 0xAA, 1);
+        assert_eq!(cpu.regs.b, 0);
+        assert_eq!(cpu.regs.hl(), 0x3FFF);
+        assert_ne!(cpu.regs.f & flag::Z, 0);
+        assert_eq!(cpu.regs.wz, 0x010F);
+    }
+
+    #[test]
+    fn e07_06_outi_b_before() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x0210);
+        cpu.regs.set_hl(0x40FF);
+        cpu.eng.tmp_l = 0x7F;
+        sem_ed(&mut cpu, 0xA3, 0);
+        sem_ed(&mut cpu, 0xA3, 1);
+        assert_eq!(cpu.regs.b, 1);
+        assert_eq!(cpu.regs.hl(), 0x4100);
+        // k = 0x7F + 0x00 = 0x7F: no carry
+        assert_eq!(cpu.regs.f & (flag::H | flag::C), 0);
+    }
+
+    #[test]
+    fn e07_06_outd() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x0110);
+        cpu.regs.set_hl(0x4001);
+        cpu.eng.tmp_l = 0x00;
+        sem_ed(&mut cpu, 0xAB, 0);
+        sem_ed(&mut cpu, 0xAB, 1);
+        assert_eq!(cpu.regs.b, 0);
+        assert_eq!(cpu.regs.hl(), 0x4000);
+        assert_ne!(cpu.regs.f & flag::Z, 0);
+    }
+
+    #[test]
+    fn e07_06_inir_repeat() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x0210);
+        cpu.regs.set_hl(0x4000);
+        cpu.regs.pc = 0x0102;
+        sem_ed(&mut cpu, 0xB2, 0);
+        sem_ed(&mut cpu, 0xB2, 1);
+        assert_eq!(cpu.regs.pc, 0x0100);
+        assert_eq!(cpu.regs.wz, 0x0101);
+        assert!(cpu.eng.cond);
+    }
+
+    #[test]
+    fn e07_06_otir_end() {
+        let mut cpu = Cpu::new();
+        cpu.regs.set_bc(0x0110);
+        cpu.regs.set_hl(0x4000);
+        cpu.regs.pc = 0x0102;
+        sem_ed(&mut cpu, 0xB3, 0);
+        sem_ed(&mut cpu, 0xB3, 1);
+        assert_eq!(cpu.regs.pc, 0x0102);
+        assert!(!cpu.eng.cond);
+        assert_eq!(cpu.regs.b, 0);
     }
 }
