@@ -620,11 +620,26 @@ pub fn compare(result: &FuseResult, expected: &FuseExpected) -> Vec<String> {
 /// (and with SingleStepTests / z80test); each entry is documented in DECISIONS.md
 /// (D-026) and `docs/qa/inbox/E13-14-Q1.md` and is excluded from [`check_all`].
 pub const KNOWN: &[(&str, &str)] = &[
-    ("edb9_2", "CPIR repeat: FUSE takes X/Y from the result, silicon from PC high (D-026)"),
-    ("edb2_1", "INIR repeat: FUSE keeps MEMPTR=BC+1 and old H/PV, silicon gives PC+1 (D-026)"),
-    ("edb3_1", "OTIR repeat: FUSE keeps MEMPTR and old H/PV, silicon gives PC+1 (D-026)"),
-    ("edba_1", "INDR repeat: FUSE keeps MEMPTR, silicon gives PC+1 (D-026)"),
-    ("edbb_1", "OTDR repeat: FUSE keeps MEMPTR and old H/PV, silicon gives PC+1 (D-026)"),
+    (
+        "edb9_2",
+        "CPIR repeat: FUSE takes X/Y from the result, silicon from PC high (D-026)",
+    ),
+    (
+        "edb2_1",
+        "INIR repeat: FUSE keeps MEMPTR=BC+1 and old H/PV, silicon gives PC+1 (D-026)",
+    ),
+    (
+        "edb3_1",
+        "OTIR repeat: FUSE keeps MEMPTR and old H/PV, silicon gives PC+1 (D-026)",
+    ),
+    (
+        "edba_1",
+        "INDR repeat: FUSE keeps MEMPTR, silicon gives PC+1 (D-026)",
+    ),
+    (
+        "edbb_1",
+        "OTDR repeat: FUSE keeps MEMPTR and old H/PV, silicon gives PC+1 (D-026)",
+    ),
 ];
 
 /// Run every test of `tests.in` and compare with `tests.expected` (matched by name).
