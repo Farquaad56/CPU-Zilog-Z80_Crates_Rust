@@ -29,7 +29,7 @@ for f in $(find "$TARGET_DIR" -name '*.rs' -type f); do
 
     # Check for std:: or extern crate std (allowed only in test-cfg files)
     if grep -nE 'std::|extern crate std;' "$f" > /dev/null 2>&1; then
-        HAS_TEST_CFG=$(grep -c '#\[cfg(test)\]\|#\[cfg(any(test, feature = "std"))\]' "$f")
+        HAS_TEST_CFG=$(grep -c '#\[cfg(test)\]\|#\[cfg(any(test, feature = "std"))\]\|#\[cfg(all(test' "$f" || true)
         if [ "$HAS_TEST_CFG" -eq 0 ]; then
             echo "FAIL: $f uses std without test cfg:"
             grep -nE 'std::|extern crate std;' "$f" | head -5
@@ -46,7 +46,7 @@ for f in $(find "$TARGET_DIR" -name '*.rs' -type f); do
 
     # Check for unwrap() outside test-cfg files
     if grep -nE '\.unwrap\(\)' "$f" > /dev/null 2>&1; then
-        HAS_TEST_CFG=$(grep -c '#\[cfg(test)\]\|#\[cfg(any(test, feature = "std"))\]' "$f")
+        HAS_TEST_CFG=$(grep -c '#\[cfg(test)\]\|#\[cfg(any(test, feature = "std"))\]\|#\[cfg(all(test' "$f" || true)
         if [ "$HAS_TEST_CFG" -eq 0 ]; then
             echo "FAIL: $f uses .unwrap() outside test context:"
             grep -nE '\.unwrap\(\)' "$f" | head -5
