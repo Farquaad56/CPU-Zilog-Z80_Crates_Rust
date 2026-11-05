@@ -104,7 +104,9 @@ fn addr16(v: u32) -> Result<u16, String> {
 }
 
 /// Largest number of rows a `view` may ask for.
-const MAX_ROWS: u32 = 4096;
+const MAX_DIS_ROWS: u32 = 100;
+const MAX_TRACE_ROWS: u32 = 64;
+const MAX_STACK_ROWS: u32 = 64;
 
 /// Apply a parsed message.
 pub fn handle(ctx: &Ctx, msg: ClientMsg, view: &mut ViewParams) -> Outcome {
@@ -155,22 +157,19 @@ pub fn handle(ctx: &Ctx, msg: ClientMsg, view: &mut ViewParams) -> Outcome {
             follow,
         } => {
             let mut v = view.clone();
-            let check = |x: Option<u32>, dst: &mut u32| -> Result<(), String> {
+            // Row counts are clamped to their maximum rather than refused.
+            let clamp = |x: Option<u32>, max: u32, dst: &mut u32| {
                 if let Some(x) = x {
-                    if x > MAX_ROWS {
-                        return Err(format!("rows must be at most {}", MAX_ROWS));
-                    }
-                    *dst = x;
+                    *dst = x.min(max);
                 }
-                Ok(())
             };
             let r = (|| {
                 if let Some(b) = mem_base {
-                    v.mem_base = addr16(b)?;
+                    v.mem_base = addr16(b)? & !0xF;
                 }
-                check(dis_rows, &mut v.dis_rows)?;
-                check(trace_rows, &mut v.trace_rows)?;
-                check(stack_rows, &mut v.stack_rows)?;
+                clamp(dis_rows, MAX_DIS_ROWS, &mut v.dis_rows);
+                clamp(trace_rows, MAX_TRACE_ROWS, &mut v.trace_rows);
+                clamp(stack_rows, MAX_STACK_ROWS, &mut v.stack_rows);
                 if let Some(f) = follow {
                     if !["pc", "sp", "hl", "de", "bc", "wr", "man"].contains(&f.as_str()) {
                         return Err(format!("unknown follow '{}'", f));
@@ -566,5 +565,115 @@ mod tests {
         let s = recv_state_where(&mut ws, |v| v["status"] == "halted");
         assert_eq!(s["regs"]["af"].as_u64().unwrap() >> 8, 7);
         std::fs::remove_dir_all(dir.parent().unwrap()).ok();
+    }
+
+    fn load_spin(ws: &mut Client) {
+        upload(ws, &SPIN);
+        recv_state_where(ws, |v| v["rom"]["name"] == "t.com");
+    }
+
+    #[test]
+    fn e14_06_step_advances() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let (_srv, addr) = server();
+        let mut ws = connect(addr);
+        load_spin(&mut ws);
+        send(&mut ws, r#"{"cmd":"step","n":5}"#);
+        let s = recv_state_where(&mut ws, |v| v["n"] == 5);
+        assert_eq!(s["status"], "idle");
+    }
+
+    #[test]
+    fn e14_06_run_pause() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let (_srv, addr) = server();
+        let mut ws = connect(addr);
+        load_spin(&mut ws);
+        send(&mut ws, r#"{"cmd":"speed","idx":5}"#);
+        send(&mut ws, r#"{"cmd":"run"}"#);
+        recv_state_where(&mut ws, |v| {
+            v["status"] == "running" && v["n"].as_u64().unwrap() > 0
+        });
+        send(&mut ws, r#"{"cmd":"pause"}"#);
+        let a = recv_state_where(&mut ws, |v| v["status"] == "idle");
+        std::thread::sleep(Duration::from_millis(150));
+        send(&mut ws, r#"{"cmd":"step","n":0}"#);
+        let b = recv_state_where(&mut ws, |v| v["status"] == "idle");
+        assert_eq!(a["n"], b["n"]);
+    }
+
+    #[test]
+    fn e14_06_speed_idx_range() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let (_srv, addr) = server();
+        let mut ws = connect(addr);
+        send(&mut ws, r#"{"cmd":"speed","idx":9}"#);
+        assert_eq!(recv(&mut ws)["type"], "error");
+        send(&mut ws, r#"{"cmd":"speed","idx":7}"#);
+        recv_state_where(&mut ws, |_| true);
+    }
+
+    #[test]
+    fn e14_06_bp_roundtrip() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let (_srv, addr) = server();
+        let mut ws = connect(addr);
+        load_spin(&mut ws);
+        send(&mut ws, r#"{"cmd":"bp_add","addr":258}"#);
+        let s = recv_state_where(&mut ws, |v| {
+            v["bps"].as_array().is_some_and(|b| !b.is_empty())
+        });
+        assert_eq!(s["bps"], serde_json::json!([258]));
+        send(&mut ws, r#"{"cmd":"bp_del","addr":258}"#);
+        recv_state_where(&mut ws, |v| {
+            v["bps"].as_array().is_some_and(|b| b.is_empty())
+        });
+        send(&mut ws, r#"{"cmd":"bp_add","addr":70000}"#);
+        assert_eq!(recv(&mut ws)["type"], "error");
+    }
+
+    #[test]
+    fn e14_06_view_bounds() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let (_srv, addr) = server();
+        let mut ws = connect(addr);
+        load_spin(&mut ws);
+        send(
+            &mut ws,
+            r#"{"cmd":"view","dis_rows":1000,"trace_rows":1000,"stack_rows":1000,"mem_base":4103,"follow":"man"}"#,
+        );
+        let s = recv_state_where(&mut ws, |v| {
+            v["dis"].as_array().is_some_and(|d| d.len() == 100)
+        });
+        assert!(s["trace"].as_array().unwrap().len() <= 64);
+        assert!(s["stack"].as_array().unwrap().len() <= 64);
+        assert_eq!(s["mem"]["base"], 4096);
+        send(&mut ws, r#"{"cmd":"view","follow":"nowhere"}"#);
+        assert_eq!(recv(&mut ws)["type"], "error");
+    }
+
+    #[test]
+    fn e14_06_console_clear() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let (_srv, addr) = server();
+        let mut ws = connect(addr);
+        upload(&mut ws, &PRINT_A);
+        recv_state_where(&mut ws, |v| v["rom"]["name"] == "t.com");
+        send(&mut ws, r#"{"cmd":"run"}"#);
+        let mut text = String::new();
+        loop {
+            let s = recv_state_where(&mut ws, |_| true);
+            text.push_str(s["console_delta"].as_str().unwrap_or(""));
+            if s["status"] == "done" {
+                break;
+            }
+        }
+        assert!(text.contains('A'), "{:?}", text);
+        send(&mut ws, r#"{"cmd":"console_clear"}"#);
+        let s = recv_state_where(&mut ws, |_| true);
+        assert_eq!(s["console_delta"].as_str().unwrap_or(""), "");
+        send(&mut ws, r#"{"cmd":"step","n":0}"#);
+        let s = recv_state_where(&mut ws, |_| true);
+        assert_eq!(s["console_delta"].as_str().unwrap_or(""), "");
     }
 }
