@@ -124,11 +124,16 @@ pub struct Case {
     pub ports: Vec<PortRow>,
 }
 
-/// Sparse 64 KiB memory: absent addresses read as [`MISSING_BYTE`].
+/// Sparse 64 KiB memory: absent addresses read as [`MISSING_BYTE`]. I/O reads return the
+/// values of the test's `ports` entries; every port transaction is logged.
 #[derive(Clone, Debug, Default)]
 pub struct SparseBus {
     /// Cells present in the map.
     pub mem: HashMap<u16, u8>,
+    /// Values returned by port reads (`ports` entries marked `"r"`).
+    pub port_in: HashMap<u16, u8>,
+    /// Port transactions seen by the bus: (port, value, `"r"` or `"w"`).
+    pub port_log: Vec<PortRow>,
 }
 
 impl SparseBus {
@@ -136,6 +141,7 @@ impl SparseBus {
     pub fn from_pairs(pairs: &[(u16, u8)]) -> Self {
         SparseBus {
             mem: pairs.iter().copied().collect(),
+            ..SparseBus::default()
         }
     }
 }
@@ -147,6 +153,16 @@ impl Bus for SparseBus {
 
     fn write(&mut self, addr: u16, data: u8) {
         self.mem.insert(addr, data);
+    }
+
+    fn io_read(&mut self, port: u16) -> u8 {
+        let v = self.port_in.get(&port).copied().unwrap_or(MISSING_BYTE);
+        self.port_log.push((port, v, "r".to_string()));
+        v
+    }
+
+    fn io_write(&mut self, port: u16, data: u8) {
+        self.port_log.push((port, data, "w".to_string()));
     }
 }
 
@@ -166,7 +182,99 @@ pub fn load_file(path: &Path) -> Result<Vec<Case>, String> {
 pub fn apply_initial(case: &Case) -> (Cpu, SparseBus) {
     let mut cpu = Cpu::new();
     case.initial.apply(&mut cpu);
-    (cpu, SparseBus::from_pairs(&case.initial.ram))
+    let mut bus = SparseBus::from_pairs(&case.initial.ram);
+    for (port, value, kind) in &case.ports {
+        if kind == "r" {
+            bus.port_in.insert(*port, *value);
+        }
+    }
+    (cpu, bus)
+}
+
+/// Compare the CPU and memory after the instruction with the case's `final` state.
+///
+/// Returns one readable line per difference (`field: expected X, got Y`); empty when equal.
+/// Bus cycles are not compared here.
+pub fn diff_final(case: &Case, cpu: &Cpu, bus: &SparseBus) -> Vec<String> {
+    let f = &case.final_;
+    let r = &cpu.regs;
+    let mut out = Vec::new();
+    let mut chk = |name: &str, want: u32, got: u32| {
+        if want != got {
+            out.push(format!(
+                "{}: expected {:#06x} ({}), got {:#06x} ({})",
+                name, want, want, got, got
+            ));
+        }
+    };
+    chk("a", u32::from(f.a), u32::from(r.a));
+    chk("b", u32::from(f.b), u32::from(r.b));
+    chk("c", u32::from(f.c), u32::from(r.c));
+    chk("d", u32::from(f.d), u32::from(r.d));
+    chk("e", u32::from(f.e), u32::from(r.e));
+    chk("f", u32::from(f.f), u32::from(r.f));
+    chk("h", u32::from(f.h), u32::from(r.h));
+    chk("l", u32::from(f.l), u32::from(r.l));
+    chk("i", u32::from(f.i), u32::from(r.i));
+    chk("r", u32::from(f.r), u32::from(r.r));
+    chk("af_", u32::from(f.af_), u32::from(r.af2()));
+    chk("bc_", u32::from(f.bc_), u32::from(r.bc2()));
+    chk("de_", u32::from(f.de_), u32::from(r.de2()));
+    chk("hl_", u32::from(f.hl_), u32::from(r.hl2()));
+    chk("ix", u32::from(f.ix), u32::from(r.ix));
+    chk("iy", u32::from(f.iy), u32::from(r.iy));
+    chk("pc", u32::from(f.pc), u32::from(r.pc));
+    chk("sp", u32::from(f.sp), u32::from(r.sp));
+    chk("wz", u32::from(f.wz), u32::from(r.wz));
+    chk("iff1", u32::from(f.iff1), u32::from(r.iff1));
+    chk("iff2", u32::from(f.iff2), u32::from(r.iff2));
+    chk("im", u32::from(f.im), u32::from(r.im));
+    chk("q", u32::from(f.q), u32::from(r.q));
+    chk("ei", u32::from(f.ei), u32::from(cpu.ei_pending()));
+    chk("p", u32::from(f.p), u32::from(cpu.ld_air_pending()));
+
+    // Memory: every cell of final.ram, and every cell the CPU changed or created.
+    for (addr, want) in &f.ram {
+        let got = bus.mem.get(addr).copied().unwrap_or(MISSING_BYTE);
+        if got != *want {
+            out.push(format!(
+                "ram[{:#06x}]: expected {:#04x}, got {:#04x}",
+                addr, want, got
+            ));
+        }
+    }
+    let mut stray: Vec<(&u16, &u8)> = bus
+        .mem
+        .iter()
+        .filter(|(addr, _)| !f.ram.iter().any(|(a, _)| a == *addr))
+        .filter(|(addr, v)| {
+            case.initial
+                .ram
+                .iter()
+                .find(|(a, _)| a == *addr)
+                .map(|(_, iv)| iv != *v)
+                .unwrap_or(true)
+        })
+        .collect();
+    stray.sort();
+    for (addr, v) in stray {
+        out.push(format!("ram[{:#06x}]: stray write {:#04x}", addr, v));
+    }
+
+    if bus.port_log != case.ports {
+        out.push(format!(
+            "ports: expected {:?}, got {:?}",
+            case.ports, bus.port_log
+        ));
+    }
+    out
+}
+
+/// Run one case on its own CPU and memory, and return the differences with `final`.
+pub fn check_case(case: &Case) -> Vec<String> {
+    let (mut cpu, mut bus) = apply_initial(case);
+    cpu.step(&mut bus);
+    diff_final(case, &cpu, &bus)
 }
 
 #[cfg(test)]
@@ -186,9 +294,9 @@ mod tests {
        "initial": {"a":102,"b":0,"c":0,"d":0,"e":0,"f":0,"h":0,"l":0,"i":0,"r":0,
          "af_":0,"bc_":0,"de_":0,"hl_":0,"ix":0,"iy":0,"pc":38371,
          "sp":0,"wz":0,"iff1":0,"iff2":0,"im":0,"ei":0,"p":0,"q":0,"ram":[[38371,211],[38372,159]]},
-       "final": {"a":102,"b":0,"c":0,"d":0,"e":0,"f":0,"h":0,"l":0,"i":0,"r":2,
+       "final": {"a":102,"b":0,"c":0,"d":0,"e":0,"f":0,"h":0,"l":0,"i":0,"r":1,
          "af_":0,"bc_":0,"de_":0,"hl_":0,"ix":0,"iy":0,"pc":38373,
-         "sp":0,"wz":26271,"iff1":0,"iff2":0,"im":0,"ei":0,"p":0,"q":0,"ram":[[38371,211],[38372,159]]},
+         "sp":0,"wz":26272,"iff1":0,"iff2":0,"im":0,"ei":0,"p":0,"q":0,"ram":[[38371,211],[38372,159]]},
        "cycles": [[38371,null,"----"],[26271,102,"-w-i"]],
        "ports": [[26271,102,"w"]]}
     ]"#;
@@ -255,5 +363,28 @@ mod tests {
         let cases = load_file(&path).unwrap();
         assert_eq!(cases.len(), 1000);
         assert_eq!(cases[0].cycles.len(), 4);
+    }
+
+    #[test]
+    fn e13_08_diff_final_ok() {
+        let cases = parse_cases(SAMPLE).unwrap();
+        assert_eq!(check_case(&cases[0]), Vec::<String>::new());
+        assert_eq!(check_case(&cases[1]), Vec::<String>::new());
+    }
+
+    #[test]
+    fn e13_08_diff_final_reports() {
+        let mut cases = parse_cases(SAMPLE).unwrap();
+        cases[0].final_.a = 111;
+        cases[0].final_.ram[0].1 = 9;
+        cases[0].final_.p = 1;
+        let d = check_case(&cases[0]);
+        assert!(
+            d.iter().any(|l| l.starts_with("a: expected 0x006f")),
+            "{:?}",
+            d
+        );
+        assert!(d.iter().any(|l| l.starts_with("ram[0x4ddf]")), "{:?}", d);
+        assert!(d.iter().any(|l| l.starts_with("p: ")), "{:?}", d);
     }
 }

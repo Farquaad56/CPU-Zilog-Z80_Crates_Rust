@@ -32,8 +32,14 @@ enum Commands {
     },
     /// Run SingleStepTests from a directory
     Ssc {
+        /// Directory of the SingleStepTests clone (or of its v1 folder)
         dir: PathBuf,
+        /// Comma-separated opcodes, e.g. 00,dd/21,dd/cb/06
+        #[arg(long)]
         filter: Option<String>,
+        /// Stop after this many failing cases (default 20)
+        #[arg(long)]
+        max_fail: Option<u32>,
     },
     /// Run FUSE test ROMs from a directory
     Fuse { dir: PathBuf },
@@ -56,9 +62,15 @@ fn main() {
         Commands::Suite { name, max_instr } => {
             commands::suite_cmd::run(commands::suite_cmd::SuiteArgs { name, max_instr })
         }
-        Commands::Ssc { dir, filter } => {
-            commands::ssc_cmd::run(commands::ssc_cmd::SscArgs { dir, filter })
-        }
+        Commands::Ssc {
+            dir,
+            filter,
+            max_fail,
+        } => commands::ssc_cmd::run(commands::ssc_cmd::SscArgs {
+            dir,
+            filter,
+            max_fail,
+        }),
         Commands::Fuse { dir } => commands::fuse_cmd::run(commands::fuse_cmd::FuseArgs { dir }),
         Commands::Z80test { rom } => {
             commands::z80test_cmd::run(commands::z80test_cmd::Z80testArgs { rom })
