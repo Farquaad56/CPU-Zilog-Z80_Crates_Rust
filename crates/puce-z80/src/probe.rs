@@ -80,6 +80,96 @@ impl Cpu {
     }
 }
 
+/// Ring of the 32 most recent values, newest first when iterated.
+#[derive(Clone, Copy, Debug, Default)]
+struct Ring {
+    v: [u16; 32],
+    head: u8,
+    count: u8,
+}
+
+impl Ring {
+    fn push(&mut self, x: u16) {
+        self.v[usize::from(self.head & 31)] = x;
+        self.head = (self.head + 1) & 31;
+        if self.count < 32 {
+            self.count += 1;
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = u16> + '_ {
+        (0..self.count).map(move |i| self.v[usize::from(self.head.wrapping_sub(1 + i) & 31)])
+    }
+}
+
+/// Start addresses of the 32 most recent instructions (HALT cycles excluded).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct History {
+    ring: Ring,
+}
+
+impl History {
+    /// Record the PC of an instruction start.
+    pub(crate) fn push(&mut self, pc: u16) {
+        self.ring.push(pc);
+    }
+
+    /// Entries, most recent first.
+    pub fn iter(&self) -> impl Iterator<Item = u16> + '_ {
+        self.ring.iter()
+    }
+}
+
+/// Addresses of the 32 most recent memory writes.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WriteLog {
+    ring: Ring,
+}
+
+impl WriteLog {
+    /// Record a write address.
+    pub(crate) fn push(&mut self, addr: u16) {
+        self.ring.push(addr);
+    }
+
+    /// Entries, most recent first.
+    pub fn iter(&self) -> impl Iterator<Item = u16> + '_ {
+        self.ring.iter()
+    }
+}
+
+/// Counters and journals kept by the CPU when the feature is on.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Journal {
+    pub(crate) history: History,
+    pub(crate) writes: WriteLog,
+    pub(crate) insns: u64,
+    pub(crate) tstates: u64,
+}
+
+#[cfg(feature = "inspect")]
+impl Cpu {
+    /// Start PCs of the last 32 instructions, most recent first (HALT cycles not included).
+    pub fn pc_history(&self) -> impl Iterator<Item = u16> + '_ {
+        self.journal.history.iter()
+    }
+
+    /// Addresses of the last 32 memory writes, most recent first.
+    pub fn recent_writes(&self) -> impl Iterator<Item = u16> + '_ {
+        self.journal.writes.iter()
+    }
+
+    /// Number of instructions started (HALT cycles and interrupt acknowledges excluded).
+    pub fn instruction_count(&self) -> u64 {
+        self.journal.insns
+    }
+
+    /// Number of T-states elapsed, wait states included.
+    pub fn tstate_count(&self) -> u64 {
+        self.journal.tstates
+    }
+}
+
 #[cfg(all(test, feature = "inspect"))]
 mod tests {
     use crate::bus::Bus;
@@ -95,6 +185,16 @@ mod tests {
         cpu.regs.sp = 0x8000;
         cpu.regs.f = 0;
         (cpu, ram)
+    }
+
+    fn collect(it: impl Iterator<Item = u16>) -> ([u16; 32], usize) {
+        let mut a = [0u16; 32];
+        let mut n = 0;
+        for x in it {
+            a[n] = x;
+            n += 1;
+        }
+        (a, n)
     }
 
     #[test]
@@ -149,5 +249,57 @@ mod tests {
         cpu.step(&mut ram);
         assert_eq!(cpu.regs.b, 0x21);
         assert_eq!(cpu.regs.pc, 0x0102);
+    }
+
+    #[test]
+    fn e12_02_history_order() {
+        let (mut cpu, mut ram) = setup(&[0x00, 0x00, 0x00]);
+        for _ in 0..3 {
+            cpu.step(&mut ram);
+        }
+        let (h, n) = collect(cpu.pc_history());
+        assert_eq!(n, 3);
+        assert_eq!(h[..3], [0x0102, 0x0101, 0x0100]);
+    }
+
+    #[test]
+    fn e12_02_history_wraps() {
+        let (mut cpu, mut ram) = setup(&[0x00; 100]);
+        for _ in 0..100 {
+            cpu.step(&mut ram);
+        }
+        let (h, n) = collect(cpu.pc_history());
+        assert_eq!(n, 32);
+        assert_eq!(h[0], 0x0100 + 99);
+        assert_eq!(h[31], 0x0100 + 68);
+    }
+
+    #[test]
+    fn e12_02_write_log() {
+        let (mut cpu, mut ram) = setup(&[0x77]);
+        cpu.regs.h = 0x40;
+        cpu.regs.l = 0x10;
+        cpu.regs.a = 0x55;
+        cpu.step(&mut ram);
+        let (w, n) = collect(cpu.recent_writes());
+        assert_eq!((n, w[0]), (1, 0x4010));
+    }
+
+    #[test]
+    fn e12_02_counters() {
+        let (mut cpu, mut ram) = setup(&[0x01, 0x34, 0x12]);
+        cpu.step(&mut ram);
+        assert_eq!(cpu.instruction_count(), 1);
+        assert_eq!(cpu.tstate_count(), 10);
+    }
+
+    #[test]
+    fn e12_02_halt_not_counted() {
+        let (mut cpu, mut ram) = setup(&[0x76]);
+        for _ in 0..6 {
+            cpu.step(&mut ram);
+        }
+        assert_eq!(cpu.pc_history().count(), 1);
+        assert_eq!(cpu.instruction_count(), 1);
     }
 }

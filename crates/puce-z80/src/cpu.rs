@@ -30,6 +30,9 @@ pub struct Cpu {
     /// Last ALU operation (feature `inspect`).
     #[cfg(feature = "inspect")]
     pub(crate) last_alu: Option<crate::probe::AluRecord>,
+    /// PC history, write log and counters (feature `inspect`).
+    #[cfg(feature = "inspect")]
+    pub(crate) journal: crate::probe::Journal,
 }
 
 impl Cpu {
@@ -41,6 +44,8 @@ impl Cpu {
             eng: Engine::new(),
             #[cfg(feature = "inspect")]
             last_alu: None,
+            #[cfg(feature = "inspect")]
+            journal: crate::probe::Journal::default(),
         };
         cpu.reset();
         cpu
@@ -114,6 +119,11 @@ impl Cpu {
             }
             // The instruction after EI has now been given its one-instruction grace.
             self.eng.ei_delay = false;
+            #[cfg(feature = "inspect")]
+            if !self.eng.halt_cycle && self.eng.irq == IrqKind::None {
+                self.journal.history.push(self.regs.pc);
+                self.journal.insns += 1;
+            }
         }
 
         // Step 3: Get current token
@@ -193,6 +203,10 @@ impl Cpu {
                 // Memory write: t0=A+D, t1=A+D+MREQ+WR, t2=A+D
                 let data = self.eng.load(&self.regs, cur.reg);
                 out = out.set_data(data);
+                #[cfg(feature = "inspect")]
+                if self.eng.t == 0 {
+                    self.journal.writes.push(self.eng.cur_addr);
+                }
                 if self.eng.t == 1 {
                     out = out.with(Pins::MREQ | Pins::WR);
                 }
@@ -235,12 +249,20 @@ impl Cpu {
 
         if sampling && pins.has(Pins::WAIT) {
             self.eng.ts_wait += 1;
+            #[cfg(feature = "inspect")]
+            {
+                self.journal.tstates += 1;
+            }
             return out; // Repeat same outputs on next tick at same t
         }
 
         // Increment t and ts counter
         self.eng.t += 1;
         self.eng.ts += 1;
+        #[cfg(feature = "inspect")]
+        {
+            self.journal.tstates += 1;
+        }
 
         // Step 5: If token complete, advance to next
         if self.eng.t == cur.len {
