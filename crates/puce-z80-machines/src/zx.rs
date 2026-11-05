@@ -71,6 +71,7 @@ struct ZxBus<'a> {
     frame_t: &'a mut u32,
     tstates: &'a mut u64,
     fe_out: &'a mut u8,
+    keys: &'a [u8; 8],
     contention: bool,
 }
 
@@ -87,9 +88,19 @@ impl Bus for ZxBus<'_> {
 
     fn io_read(&mut self, port: u16) -> u8 {
         if port & 1 == 0 {
-            PORT_FE_IDLE
+            // Keyboard: half-rows selected by a low address bit A8..A15 are and-ed;
+            // bits 5 and 7 are 1 and EAR (bit 6) is 0, i.e. PORT_FE_IDLE with no key down.
+            let mut v = 0x1Fu8;
+            for (row, down) in self.keys.iter().enumerate() {
+                if port & (0x0100 << row) == 0 {
+                    v &= !down;
+                }
+            }
+            0xA0 | (v & 0x1F)
+        } else if port & 0x20 == 0 {
+            0x00 // Kempston joystick: nothing pressed
         } else {
-            0xFF
+            0xFF // floating bus approximated by an idle bus
         }
     }
 
@@ -117,6 +128,20 @@ impl Bus for ZxBus<'_> {
         let t1 = (*self.frame_t + FRAME_TSTATES - 1) % FRAME_TSTATES;
         contention_delay(t1)
     }
+}
+
+/// Position of a key in the keyboard matrix: (half-row, bit).
+pub fn key_position(ch: char) -> Option<(usize, u8)> {
+    const ROWS: [&str; 8] = [
+        "?ZXCV", "ASDFG", "QWERT", "12345", "09876", "POIUY", "\nLKJH", " ?MNB",
+    ];
+    let up = ch.to_ascii_uppercase();
+    for (row, keys) in ROWS.iter().enumerate() {
+        if let Some(bit) = keys.chars().position(|k| k == up && k != '?') {
+            return Some((row, bit as u8));
+        }
+    }
+    None
 }
 
 /// ULA contention delay for an access whose first T-state is `t` (counted from the frame start).
@@ -152,6 +177,8 @@ pub struct ZxMachine {
     pub frame_t: u32,
     /// Last value written to port 0xFE (border, MIC, speaker).
     pub fe_out: u8,
+    /// Keyboard half-rows (index 0 = port FEFEh ... 7 = 7FFEh); bit set = key down.
+    pub keys: [u8; 8],
     contention: bool,
     /// Number of bytes of a PRINT-A control sequence still to skip (AT, TAB take two).
     skip: u8,
@@ -182,6 +209,7 @@ impl ZxMachine {
             tstates: 0,
             frame_t: 0,
             fe_out: 0,
+            keys: [0; 8],
             contention: false,
             skip: 0,
         }
@@ -198,6 +226,19 @@ impl ZxMachine {
         self.tap = parse_tap(bytes)?;
         self.tap_pos = 0;
         Ok(())
+    }
+
+    /// Press a key (digits, letters, ENTER as '\n', SPACE as ' ') until `release_keys`.
+    /// Unknown characters are ignored.
+    pub fn press_key(&mut self, ch: char) {
+        if let Some((row, bit)) = key_position(ch) {
+            self.keys[row] |= 1 << bit;
+        }
+    }
+
+    /// Release every key.
+    pub fn release_keys(&mut self) {
+        self.keys = [0; 8];
     }
 
     /// Copy `bytes` to `addr` (also in the ROM area) without going through the bus.
@@ -293,6 +334,7 @@ impl ZxMachine {
             frame_t: &mut self.frame_t,
             tstates: &mut self.tstates,
             fe_out: &mut self.fe_out,
+            keys: &self.keys,
             contention: self.contention,
         };
         self.cpu.step(&mut bus)
@@ -474,6 +516,38 @@ mod tests {
         m.cpu.regs.a = 0x00;
         m.step();
         assert_eq!(m.cpu.regs.a, 0xBF);
+    }
+
+    #[test]
+    fn e13_19_keyboard_matrix() {
+        let mut m = ZxMachine::new_romless();
+        m.load_code(0x8000, &[0x01, 0xFE, 0xF7, 0xED, 0x78, 0x76]); // LD BC,F7FEh; IN A,(C)
+        m.cpu.regs.pc = 0x8000;
+        m.press_key('1');
+        m.step();
+        m.step();
+        assert_eq!(m.cpu.regs.a, 0xBE, "key 1 is bit 0 of half-row F7FEh");
+        m.release_keys();
+        m.cpu.regs.pc = 0x8003;
+        m.step();
+        assert_eq!(m.cpu.regs.a, 0xBF);
+        assert_eq!(key_position('2'), Some((3, 1)));
+        assert_eq!(key_position('\n'), Some((6, 0)));
+        assert_eq!(key_position('#'), None);
+    }
+
+    #[test]
+    fn e13_19_kempston_and_floating_bus() {
+        let mut m = ZxMachine::new_romless();
+        m.load_code(0x8000, &[0xDB, 0x1F, 0x47, 0xDB, 0xFF, 0x76]); // IN A,(1Fh); LD B,A; IN A,(FFh)
+        m.cpu.regs.pc = 0x8000;
+        m.cpu.regs.a = 0xFF;
+        m.step();
+        m.step();
+        m.cpu.regs.a = 0xFF;
+        m.step();
+        assert_eq!(m.cpu.regs.b, 0x00, "Kempston idle");
+        assert_eq!(m.cpu.regs.a, 0xFF, "floating bus");
     }
 
     #[test]
