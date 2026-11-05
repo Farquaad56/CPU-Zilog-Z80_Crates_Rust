@@ -824,3 +824,68 @@ fn e07_07_ed_all() {
 
     println!("All {} ED table vectors passed", rows.len());
 }
+
+/// Run every vector of one table and fail with the first mismatches.
+fn run_whole_table(table: &str, expected: usize) {
+    let rows = filtered_rows(table, "", "");
+    assert_eq!(
+        rows.len(),
+        expected,
+        "Expected {expected} {table} table vectors"
+    );
+
+    println!(
+        "Running {} differential vectors ({table} table)",
+        rows.len()
+    );
+
+    let mut failures = Vec::new();
+    for (i, (table, opcode, vec, row)) in rows.iter().enumerate() {
+        match run_vector(table, *opcode, *vec) {
+            Ok((cpu, bus)) => {
+                if let Err(e) = compare_vector(table, *opcode, *vec, row, &cpu, &bus) {
+                    failures.push(format!(
+                        "[{}/{}] {} {:02X} vec{}: {}",
+                        i + 1,
+                        rows.len(),
+                        table,
+                        opcode,
+                        vec,
+                        e
+                    ));
+                }
+            }
+            Err(e) => failures.push(format!(
+                "[{}/{}] {} {:02X} vec{}: run failed: {}",
+                i + 1,
+                rows.len(),
+                table,
+                opcode,
+                vec,
+                e
+            )),
+        }
+    }
+
+    if !failures.is_empty() {
+        println!("\n{} failures:", failures.len());
+        for f in &failures[..20.min(failures.len())] {
+            println!("  {}", f);
+        }
+        panic!("Differential test failed");
+    }
+
+    println!("All {} {table} table vectors passed", rows.len());
+}
+
+/// E08-09: all 1512 vectors of the DD/FD table.
+#[test]
+fn e08_09_ddfd_all() {
+    run_whole_table("ddfd", 1512);
+}
+
+/// E08-09: all 1536 vectors of the DDCB/FDCB table.
+#[test]
+fn e08_09_ddcb_all() {
+    run_whole_table("ddcb", 1536);
+}
