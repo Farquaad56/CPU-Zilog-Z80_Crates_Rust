@@ -16,7 +16,7 @@ Normal (D-003 et .gitignore). Utiliser `python docs/tools/fetch_roms.py`. URL en
 `regs.pc` vaut l'adresse du prochain octet a lire (PC+ incremente a chaque lecture). Hors frontiere d'instruction il est donc "au milieu" de l'instruction.
 
 ## Q: Quelle valeur pour R apres reset, registres indefinis?
-UNKNOWN - to confirm (Q-001). Defaut du crate: AF=SP=0xFFFF, autres registres inchanges (D-006).
+Resolu (D-028): apres RESET, PC=I=R=0, IFF1=IFF2=0, IM=0, AF=SP=0xFFFF; BC DE HL IX IY et le jeu alterne restent inchanges (Zilog ne specifie pas leur valeur).
 
 ## ROMs: sources verifiees
 Verifie le 2026-11-05 (E13-01) avec `git clone --depth 1` / HTTP HEAD depuis la machine du projet.
