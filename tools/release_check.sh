@@ -4,6 +4,17 @@
 set -eu
 cd "$(dirname "$0")/.."
 
+# Git Bash on Windows does not always have the Rust toolchain in its PATH.
+if ! command -v cargo >/dev/null 2>&1; then
+  export PATH="$HOME/.cargo/bin:$USERPROFILE/.cargo/bin:$PATH"
+fi
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "error: cargo not found (install Rust from https://rustup.rs)" >&2
+  exit 1
+fi
+PY=python
+command -v python >/dev/null 2>&1 || PY=python3
+
 step() { echo; echo "=== $*"; }
 
 step "cargo fmt --check"
@@ -25,7 +36,7 @@ step "test suites (suite all)"
 cargo run --release -p puce-z80-cli -- suite all --json suites.json
 
 step "suites report"
-python docs/tools/suites_report.py suites.json
+"$PY" docs/tools/suites_report.py suites.json
 
 echo
 echo "release_check: all checks passed"
