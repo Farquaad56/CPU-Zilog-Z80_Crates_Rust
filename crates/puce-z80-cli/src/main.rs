@@ -40,6 +40,9 @@ enum Commands {
         /// Stop after this many failing cases (default 20)
         #[arg(long)]
         max_fail: Option<u32>,
+        /// Also compare the bus cycles T-state by T-state
+        #[arg(long)]
+        cycles: bool,
     },
     /// Run FUSE test ROMs from a directory
     Fuse { dir: PathBuf },
@@ -66,10 +69,12 @@ fn main() {
             dir,
             filter,
             max_fail,
+            cycles,
         } => commands::ssc_cmd::run(commands::ssc_cmd::SscArgs {
             dir,
             filter,
             max_fail,
+            cycles,
         }),
         Commands::Fuse { dir } => commands::fuse_cmd::run(commands::fuse_cmd::FuseArgs { dir }),
         Commands::Z80test { rom } => {
