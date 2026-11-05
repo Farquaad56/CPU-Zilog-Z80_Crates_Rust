@@ -17,3 +17,29 @@ name = "zexall.cim"
 url = "https://raw.githubusercontent.com/superzazu/z80/master/roms/zexall.cim"
 size = 8588
 sha256 = "af7e5d86146d390a68440fb85668648f14a648602da29a1816d2ef11459411ae"
+
+# Timing / interrupt programs (E13-18, hand maintained; see docs/specs/36_TIMING_ROMS.md). Local copies in tests/roms/timing/.
+
+[[rom]]
+name = "woodmass_z80tests.tap"
+url = "https://raw.githubusercontent.com/MrKWatkins/EmulatorTestSuites/main/src/MrKWatkins.EmulatorTestSuites.Z80/Program/MarkWoodmass/z80tests.tap"
+size = 5573
+sha256 = "42ce7fc8393de83876b89015be54f7d0da3c8c5b07a075981c12dd9d84c8b95d"
+
+[[rom]]
+name = "timing_tests_48k_v1.0.z80"
+url = "https://raw.githubusercontent.com/MrKWatkins/EmulatorTestSuites/main/src/MrKWatkins.EmulatorTestSuites.ZXSpectrum/Timing/timing_tests_48k_v1.0.z80"
+size = 10883
+sha256 = "1e66230a7b23737294f35d2778b8384ce3f81412b98883d35e564091377382af"
+
+[[rom]]
+name = "z80_block_flags_v5.0beta.tap"
+url = "https://zxe.io/depot/software/ZX%20Spectrum/Z80%20Block%20Flags%20Test%20v5.0-beta%20%282022-01-11%29%28Helcmanovsky%2C%20Peter%29%5B%21%5D.tap"
+size = 1529
+sha256 = "3b5fc9a527e7b97a00e36820dba2812e55d83a773427f23dd53ecabcf34c439e"
+
+[[rom]]
+name = "z80_im1_vs_jr.tap"
+url = "https://zxe.io/depot/software/ZX%20Spectrum/Z80%20IM1%20vs%20JR%20%282022-02-11%29%28Helcmanovsky%2C%20Peter%29%5B%21%5D.tap"
+size = 186
+sha256 = "01ff836ea68e273b332cd7d9c2bd18dde3f9d4fcc62f369443517131e8e47a18"

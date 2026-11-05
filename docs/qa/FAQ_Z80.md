@@ -44,3 +44,10 @@ Verifie le 2026-11-05 (E13-01) avec `git clone --depth 1` / HTTP HEAD depuis la 
 - Le programme ne retourne aucun code: il imprime par RST 10h (codes 13, 23+2 octets de TAB, 127). Il faut `0xBF` en lecture du port 0xFE, sinon les tests IN sont refuses.
 - Une ROM 48K n'est pas obligatoire: simuler `0x1601` (CHAN-OPEN = RET) et `0x0010` (capture de A) suffit; CODE charge en `0x8000`, entree `0x8000`.
 - Les `.tap` sont dans la release v1.2a (zip), pas dans le depot git.
+
+## ROMs de timing et d'interruptions (E13-18)
+
+- Detail et criteres: `docs/specs/36_TIMING_ROMS.md`. Retenus (telecharges, sha256 dans `tests/manifest.toml`, copies dans `tests/roms/timing/`): Woodmass `z80tests.tap`, timing 48K `timing_tests_48k_v1.0.z80`, Block Flags v5.0-beta, IM1 vs JR.
+- Seul IM1 vs JR se verifie sans ROM (HL = 0 au retour). Les autres exigent la ROM 48K de l'utilisateur (`tests/roms/zx48.rom`, jamais commitee).
+- Le verdict automatique du test de timing 48K est `UNAVAILABLE` (valeurs de reference non publiees sous forme exploitable).
+- FDDD (Woodmass) exige le mode allRAM du +3: non retenu.
