@@ -6,6 +6,7 @@
 use super::regs::{hl, r8, rp, set_f, set_hl, set_r8, set_rp};
 use crate::alu;
 use crate::cpu::Cpu;
+use crate::probe;
 use crate::regs::flag;
 
 /// IM mode table: [0,0,1,2,0,0,1,2] indexed by y.
@@ -75,6 +76,11 @@ fn ed_adc_sbc_hl_rp(cpu: &mut Cpu, y: u8) {
         alu::sbc16(hl_before, rp_val, cpu.regs.f)
     };
 
+    let op = if q == 1 { 33 } else { 34 };
+    probe::alu(
+        cpu,
+        probe::rec16(op, hl_before, rp_val, res, cpu.regs.f, flags),
+    );
     set_hl(cpu, res);
     set_f(cpu, flags);
     cpu.regs.wz = hl_before.wrapping_add(1);
@@ -130,6 +136,7 @@ fn ed_out_c(cpu: &mut Cpu, y: u8) {
 fn ed_neg(cpu: &mut Cpu) {
     let a = cpu.regs.a;
     let (res, flags) = alu::neg(a);
+    probe::alu(cpu, probe::rec8(41, a, 0, res, cpu.regs.f, flags));
     cpu.regs.a = res;
     set_f(cpu, flags);
 }

@@ -27,6 +27,9 @@ pub struct Cpu {
     pub regs: Regs,
     /// Execution engine (internal).
     pub(crate) eng: Engine,
+    /// Last ALU operation (feature `inspect`).
+    #[cfg(feature = "inspect")]
+    pub(crate) last_alu: Option<crate::probe::AluRecord>,
 }
 
 impl Cpu {
@@ -36,6 +39,8 @@ impl Cpu {
         let mut cpu = Cpu {
             regs: Regs::default(),
             eng: Engine::new(),
+            #[cfg(feature = "inspect")]
+            last_alu: None,
         };
         cpu.reset();
         cpu

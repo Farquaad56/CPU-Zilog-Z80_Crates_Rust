@@ -49,12 +49,15 @@ pub mod __internal {
     pub use crate::engine::decode::{decode, Decoded, Table};
 }
 
-#[cfg(test)]
-mod tables_check;
-// #[cfg(feature = "inspect")]
-// pub mod probe;        // Inspection journal and history
 #[cfg(feature = "disasm")]
 pub mod disasm;
+#[cfg(feature = "inspect")]
+pub mod probe;
+#[cfg(not(feature = "inspect"))]
+#[path = "probe.rs"]
+mod probe; // Inspection journal and history
+#[cfg(test)]
+mod tables_check;
 
 #[cfg(test)]
 mod tests {

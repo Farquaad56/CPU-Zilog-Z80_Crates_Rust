@@ -7,6 +7,7 @@
 use super::regs::{r8, set_f, set_r8};
 use crate::alu;
 use crate::cpu::Cpu;
+use crate::probe;
 
 /// Execute CB-prefix instruction semantics.
 pub(crate) fn sem_cb(cpu: &mut Cpu, op: u8, hook_no: u8) {
@@ -35,6 +36,7 @@ pub(crate) fn sem_cb(cpu: &mut Cpu, op: u8, hook_no: u8) {
 fn sem_cb_rot(cpu: &mut Cpu, y: u8, z: u8) {
     let v = r8(cpu, z);
     let (res, flags) = alu::rot(y, v, cpu.regs.f);
+    probe::alu(cpu, probe::rec8(16 + y, v, 0, res, cpu.regs.f, flags));
     set_r8(cpu, z, res);
     set_f(cpu, flags);
 }

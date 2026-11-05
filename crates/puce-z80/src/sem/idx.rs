@@ -7,6 +7,7 @@ use super::main::sem_main;
 use super::regs::{r8x, set_f, set_r8, set_r8x};
 use crate::alu;
 use crate::cpu::Cpu;
+use crate::probe;
 
 /// True when the DD/FD prefix changes the instruction (HL/H/L/(HL) become IX/IY forms).
 ///
@@ -89,6 +90,8 @@ fn idx_reg_op(cpu: &mut Cpu, op: u8) {
             } else {
                 alu::dec8(v, cpu.regs.f)
             };
+            let op = if z == 4 { 8 } else { 9 };
+            probe::alu(cpu, probe::rec8(op, v, 0, res, cpu.regs.f, f));
             set_r8x(cpu, y, res);
             set_f(cpu, f);
         }
@@ -96,6 +99,7 @@ fn idx_reg_op(cpu: &mut Cpu, op: u8) {
             // ALU A,r(z)
             let b = r8x(cpu, z);
             let (res, f) = alu::alu8(y, cpu.regs.a, b, cpu.regs.f);
+            probe::alu(cpu, probe::rec8(y, cpu.regs.a, b, res, cpu.regs.f, f));
             if y != 7 {
                 cpu.regs.a = res;
             }
@@ -158,6 +162,7 @@ pub(crate) fn sem_ddcb(cpu: &mut Cpu, op: u8, hook_no: u8) {
     let res = match x {
         0 => {
             let (res, flags) = alu::rot(y, v, cpu.regs.f);
+            probe::alu(cpu, probe::rec8(16 + y, v, 0, res, cpu.regs.f, flags));
             set_f(cpu, flags);
             res
         }

@@ -6,6 +6,7 @@
 use super::regs::{hl, r8, rp, rp2, set_f, set_hl, set_r8, set_rp, set_rp2};
 use crate::alu;
 use crate::cpu::Cpu;
+use crate::probe;
 use crate::regs::flag;
 
 /// SCF / CCF take bits 3 and 5 of F from `A | (F ^ Q)` (NMOS Zilog) when true, from `A` alone
@@ -206,11 +207,13 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
         if z == 4 {
             // INC r: increment register
             let (res, new_f) = alu::inc8(v, old_f);
+            probe::alu(cpu, probe::rec8(8, v, 0, res, old_f, new_f));
             set_r8(cpu, y, res);
             set_f(cpu, new_f);
         } else {
             // DEC r: decrement register
             let (res, new_f) = alu::dec8(v, old_f);
+            probe::alu(cpu, probe::rec8(9, v, 0, res, old_f, new_f));
             set_r8(cpu, y, res);
             set_f(cpu, new_f);
         }
@@ -238,6 +241,10 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
         // WZ = HL + 1 (before addition)
         cpu.regs.wz = hl_before.wrapping_add(1);
         let (res, new_f) = alu::add16(hl_before, rp_val, cpu.regs.f);
+        probe::alu(
+            cpu,
+            probe::rec16(32, hl_before, rp_val, res, cpu.regs.f, new_f),
+        );
         set_hl(cpu, res);
         set_f(cpu, new_f);
     }
@@ -247,6 +254,7 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
         let a = cpu.regs.a;
         let b = r8(cpu, z);
         let (res, new_f) = alu::alu8(y, a, b, cpu.regs.f);
+        probe::alu(cpu, probe::rec8(y, a, b, res, cpu.regs.f, new_f));
         // CP preserves A; all other ALU ops store result in A
         if y != 7 {
             set_r8(cpu, 7, res);
@@ -259,6 +267,7 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
         let a = cpu.regs.a;
         let b = cpu.eng.tmp_l; // immediate value already loaded into tmp_l
         let (res, new_f) = alu::alu8(y, a, b, cpu.regs.f);
+        probe::alu(cpu, probe::rec8(y, a, b, res, cpu.regs.f, new_f));
         if y != 7 {
             set_r8(cpu, 7, res);
         }
@@ -332,6 +341,7 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
             // DAA: decimal adjust accumulator
             4 => {
                 let (res, new_f) = alu::daa(a, old_f);
+                probe::alu(cpu, probe::rec8(40, a, 0, res, old_f, new_f));
                 cpu.regs.a = res;
                 set_f(cpu, new_f);
             }
@@ -344,6 +354,7 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
                     | flag::H
                     | flag::N
                     | (res & 0x28);
+                probe::alu(cpu, probe::rec8(42, a, 0, res, old_f, flags));
                 set_f(cpu, flags);
             }
 
