@@ -5,6 +5,7 @@
 #![allow(dead_code)]
 
 use crate::cpu::Cpu;
+use crate::pins::Pins;
 
 /// Record of the last ALU operation executed by the CPU.
 ///
@@ -145,6 +146,39 @@ pub(crate) struct Journal {
     pub(crate) writes: WriteLog,
     pub(crate) insns: u64,
     pub(crate) tstates: u64,
+    pub(crate) bus: BusView,
+}
+
+/// View of the last complete bus cycle.
+#[derive(Clone, Copy, Debug)]
+pub struct BusView {
+    /// Address bus.
+    pub addr: u16,
+    /// Data transferred.
+    pub data: u8,
+    /// 0 = fetch, 1 = memory read, 2 = memory write, 3 = I/O read, 4 = I/O write.
+    pub kind: u8,
+    /// Pin state of the tick that completed the cycle.
+    pub pins: Pins,
+}
+
+impl Default for BusView {
+    fn default() -> Self {
+        BusView {
+            addr: 0,
+            data: 0,
+            kind: 0,
+            pins: Pins(0),
+        }
+    }
+}
+
+#[cfg(feature = "inspect")]
+impl Cpu {
+    /// The last complete bus cycle (all zero before the first one).
+    pub fn last_bus(&self) -> BusView {
+        self.journal.bus
+    }
 }
 
 #[cfg(feature = "inspect")]
@@ -301,5 +335,43 @@ mod tests {
         }
         assert_eq!(cpu.pc_history().count(), 1);
         assert_eq!(cpu.instruction_count(), 1);
+    }
+
+    #[test]
+    fn e12_03_fetch_view() {
+        let mut ram = SimpleRam::new();
+        let mut cpu = Cpu::new();
+        cpu.step(&mut ram);
+        let v = cpu.last_bus();
+        assert_eq!((v.kind, v.addr), (0, 0));
+    }
+
+    #[test]
+    fn e12_03_write_view() {
+        let (mut cpu, mut ram) = setup(&[0x77]);
+        cpu.regs.h = 0x40;
+        cpu.regs.l = 0x10;
+        cpu.regs.a = 0x55;
+        cpu.step(&mut ram);
+        let v = cpu.last_bus();
+        assert_eq!((v.kind, v.addr, v.data), (2, 0x4010, 0x55));
+    }
+
+    #[test]
+    fn e12_03_io_view() {
+        let (mut cpu, mut ram) = setup(&[0xD3, 0x7F]);
+        cpu.regs.a = 0x12;
+        cpu.step(&mut ram);
+        let v = cpu.last_bus();
+        assert_eq!((v.kind, v.data), (4, 0x12));
+    }
+
+    #[test]
+    fn e12_03_read_view() {
+        let (mut cpu, mut ram) = setup(&[0x3A, 0x00, 0x30]);
+        ram.write(0x3000, 0x9C);
+        cpu.step(&mut ram);
+        let v = cpu.last_bus();
+        assert_eq!((v.kind, v.addr, v.data), (1, 0x3000, 0x9C));
     }
 }

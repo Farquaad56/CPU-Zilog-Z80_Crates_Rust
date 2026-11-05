@@ -239,6 +239,33 @@ impl Cpu {
             }
         }
 
+        // Last complete bus cycle (feature inspect).
+        #[cfg(feature = "inspect")]
+        {
+            let t = self.eng.t;
+            let done = match cur.kind {
+                Kind::F => t == if cur.len == 7 { 5 } else { 2 },
+                Kind::R | Kind::W => t == 2,
+                Kind::N | Kind::O => t == 3,
+                _ => false,
+            };
+            if done {
+                let (kind, data) = match cur.kind {
+                    Kind::F => (0, pins.data()),
+                    Kind::R => (1, pins.data()),
+                    Kind::W => (2, out.data()),
+                    Kind::N => (3, pins.data()),
+                    _ => (4, out.data()),
+                };
+                self.journal.bus = crate::probe::BusView {
+                    addr: self.eng.cur_addr,
+                    data,
+                    kind,
+                    pins: out,
+                };
+            }
+        }
+
         // WAIT state insertion: at sampling points, if WAIT pin is active,
         // insert a wait T-state (don't advance t, increment ts_wait).
         let sampling = match cur.kind {
