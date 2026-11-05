@@ -57,6 +57,12 @@ enum Commands {
         #[arg(long)]
         max_frames: Option<u64>,
     },
+    /// Measure the CPU throughput (T-states per second)
+    Bench {
+        /// Duration of the measurement in seconds
+        #[arg(long, default_value_t = 10)]
+        seconds: u64,
+    },
     /// Disassemble a binary file
     Disasm { file: PathBuf, org: String },
     /// Fetch test ROMs and data files
@@ -95,6 +101,9 @@ fn main() {
             rom,
             max_frames,
         }),
+        Commands::Bench { seconds } => {
+            commands::bench_cmd::run(commands::bench_cmd::BenchArgs { seconds })
+        }
         Commands::Disasm { file, org } => {
             commands::disasm_cmd::run(commands::disasm_cmd::DisasmArgs { file, org })
         }

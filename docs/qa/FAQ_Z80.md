@@ -51,3 +51,13 @@ Verifie le 2026-11-05 (E13-01) avec `git clone --depth 1` / HTTP HEAD depuis la 
 - Seul IM1 vs JR se verifie sans ROM (HL = 0 au retour). Les autres exigent la ROM 48K de l'utilisateur (`tests/roms/zx48.rom`, jamais commitee).
 - Le verdict automatique du test de timing 48K est `UNAVAILABLE` (valeurs de reference non publiees sous forme exploitable).
 - FDDD (Woodmass) exige le mode allRAM du +3: non retenu.
+
+## Performance
+`z80 bench --seconds N` (E13-20) runs a NOP / LD A,n / ADD A,B / LD B,A / LD B,n / JR loop on the
+romless ZX machine in release mode and prints instructions/s and T-states/s ("MHz equivalent").
+- Objectif: >= 15 MHz equivalent (ZEXDOC/ZEXALL, 46,7 G T-states, < 1 h).
+- Mesure (avant toute optimisation, release, 5 s): 20.1 MIPS, 127.6 MHz equivalent.
+- Resultat: l'objectif est atteint avec une marge de ~8x; aucune optimisation n'a ete necessaire
+  (le moteur est inchange; ZEXALL complet ~6 min estimees a ce debit).
+- Le debit reel varie avec la machine et avec le melange d'instructions (les instructions
+  prefixees et les blocs sont plus lents que cette boucle).
