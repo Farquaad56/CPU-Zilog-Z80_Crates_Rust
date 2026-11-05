@@ -7,6 +7,7 @@
 #![deny(missing_docs)]
 
 pub mod cpm;
+pub mod fuse;
 pub mod session;
 pub mod ssc;
 pub mod zx;
