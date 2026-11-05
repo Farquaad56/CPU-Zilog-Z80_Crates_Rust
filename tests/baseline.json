@@ -1,12 +1,4 @@
 {
-  "known_failures": [
-    "76",
-    "dd 76",
-    "fd 76"
-  ],
-  "reasons": {
-    "76": "HALT: SingleStepTests moves PC past the HALT, the crate keeps PC on HALT (D-022); recalibrate in E13-10",
-    "dd 76": "HALT: SingleStepTests moves PC past the HALT, the crate keeps PC on HALT (D-022); recalibrate in E13-10",
-    "fd 76": "HALT: SingleStepTests moves PC past the HALT, the crate keeps PC on HALT (D-022); recalibrate in E13-10"
-  }
+  "known_failures": [],
+  "reasons": {}
 }

@@ -621,6 +621,10 @@ pub fn compare(result: &FuseResult, expected: &FuseExpected) -> Vec<String> {
 /// (D-026) and `docs/qa/inbox/E13-14-Q1.md` and is excluded from [`check_all`].
 pub const KNOWN: &[(&str, &str)] = &[
     (
+        "76",
+        "HALT: FUSE keeps PC on the HALT opcode, silicon and SingleStepTests move it past (D-027)",
+    ),
+    (
         "edb9_2",
         "CPIR repeat: FUSE takes X/Y from the result, silicon from PC high (D-026)",
     ),

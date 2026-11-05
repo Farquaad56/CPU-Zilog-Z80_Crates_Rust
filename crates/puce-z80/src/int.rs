@@ -73,12 +73,11 @@ impl Cpu {
         self.eng.nmi_prev = false;
     }
 
-    /// Begin the NMI sequence (11 T): the return address goes to TMP (PC + 1 when halted).
+    /// Begin the NMI sequence (11 T): the return address goes to TMP (PC, already past HALT).
     pub(crate) fn start_nmi(&mut self) {
         self.eng.irq = IrqKind::Nmi;
-        let mut ret = self.regs.pc;
+        let ret = self.regs.pc;
         if self.regs.halted {
-            ret = ret.wrapping_add(1);
             self.regs.halted = false;
             self.eng.halt_cycle = false;
         }
@@ -144,9 +143,8 @@ impl Cpu {
             2 => &IM2_PLAN,
             _ => &IM1_PLAN,
         };
-        let mut ret = self.regs.pc;
+        let ret = self.regs.pc;
         if self.regs.halted {
-            ret = ret.wrapping_add(1);
             self.regs.halted = false;
             self.eng.halt_cycle = false;
         }
@@ -272,7 +270,7 @@ mod tests {
 
     use crate::bus::{Bus, SimpleRam};
 
-    /// CPU that has just executed HALT at address 0 (halted, PC on the HALT opcode).
+    /// CPU that has just executed HALT at address 0 (halted, PC just past the HALT opcode).
     fn halted_cpu() -> (Cpu, SimpleRam) {
         let mut ram = SimpleRam::new();
         ram.write(0, 0x76);

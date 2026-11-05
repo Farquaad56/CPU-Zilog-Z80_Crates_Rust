@@ -65,10 +65,9 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
             cpu.eng.ei_delay = true;
         }
 
-        // HALT (0x76): halt CPU, PC stays on HALT opcode
+        // HALT (0x76): halt CPU; PC is already past the HALT opcode (D-027, as on silicon)
         0x76 => {
             cpu.regs.halted = true;
-            cpu.regs.pc = cpu.regs.pc.wrapping_sub(1);
         }
 
         // EX AF,AF' (0x08)

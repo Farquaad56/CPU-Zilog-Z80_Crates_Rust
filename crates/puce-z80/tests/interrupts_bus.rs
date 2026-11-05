@@ -84,7 +84,7 @@ fn e09_08_irq_scenario() {
     cpu.regs.sp = 0xF000;
 
     let mut steps = 0;
-    while !(bus.ram.read(0x9000) == 1 && cpu.regs.halted && cpu.regs.pc == 0x0007) {
+    while !(bus.ram.read(0x9000) == 1 && cpu.regs.halted && cpu.regs.pc == 0x0008) {
         cpu.step(&mut bus);
         steps += 1;
         assert!(steps < 200, "scenario did not finish");

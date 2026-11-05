@@ -192,7 +192,7 @@ mod tests {
         cpu.regs.pc = 100;
         sem(&mut cpu, Table::Main, 0x76, 0);
         assert!(cpu.regs.halted, "HALT sets halted flag");
-        assert_eq!(cpu.regs.pc, 99, "HALT decrements PC (stays on opcode)");
+        assert_eq!(cpu.regs.pc, 100, "HALT leaves PC past the opcode (D-027)");
     }
 
     #[test]
