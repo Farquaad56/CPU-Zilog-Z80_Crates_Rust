@@ -588,6 +588,7 @@ mod tests {
         let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
         let (_srv, addr) = server();
         let mut ws = connect(addr);
+        send(&mut ws, r#"{"cmd":"hello"}"#); // enables spontaneous state pushes
         load_spin(&mut ws);
         send(&mut ws, r#"{"cmd":"speed","idx":5}"#);
         send(&mut ws, r#"{"cmd":"run"}"#);
@@ -597,7 +598,7 @@ mod tests {
         send(&mut ws, r#"{"cmd":"pause"}"#);
         let a = recv_state_where(&mut ws, |v| v["status"] == "idle");
         std::thread::sleep(Duration::from_millis(150));
-        send(&mut ws, r#"{"cmd":"step","n":0}"#);
+        send(&mut ws, r#"{"cmd":"view"}"#);
         let b = recv_state_where(&mut ws, |v| v["status"] == "idle");
         assert_eq!(a["n"], b["n"]);
     }
@@ -672,7 +673,7 @@ mod tests {
         send(&mut ws, r#"{"cmd":"console_clear"}"#);
         let s = recv_state_where(&mut ws, |_| true);
         assert_eq!(s["console_delta"].as_str().unwrap_or(""), "");
-        send(&mut ws, r#"{"cmd":"step","n":0}"#);
+        send(&mut ws, r#"{"cmd":"view"}"#);
         let s = recv_state_where(&mut ws, |_| true);
         assert_eq!(s["console_delta"].as_str().unwrap_or(""), "");
     }
