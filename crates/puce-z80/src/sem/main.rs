@@ -29,7 +29,10 @@ fn scf_ccf_xy(a: u8, old_f: u8, q: u8) -> u8 {
 
 /// The Q seen by SCF / CCF: 0 when a DD / FD prefix precedes the opcode.
 fn scf_ccf_q(cpu: &Cpu) -> u8 {
-    if cpu.eng.prefix == crate::engine::decode::Prefix::None {
+    // The CMOS variant has no Q factor: X Y come from `A | F`.
+    if cpu.variant == crate::cpu::Variant::Cmos {
+        0
+    } else if cpu.eng.prefix == crate::engine::decode::Prefix::None {
         cpu.regs.q
     } else {
         0

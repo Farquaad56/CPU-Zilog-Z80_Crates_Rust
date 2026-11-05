@@ -124,10 +124,16 @@ fn ed_in_c(cpu: &mut Cpu, y: u8) {
     }
 }
 
-/// OUT (C),r (y != 6) and OUT (C),0 (y == 6, NMOS).
+/// OUT (C),r (y != 6) and OUT (C),0 (y == 6: writes 0 on NMOS, 0xFF on CMOS).
 /// X0: TMP.L = value to output; WZ = BC + 1.
 fn ed_out_c(cpu: &mut Cpu, y: u8) {
-    cpu.eng.tmp_l = if y == 6 { 0 } else { r8(cpu, y) };
+    cpu.eng.tmp_l = if y != 6 {
+        r8(cpu, y)
+    } else if cpu.variant == crate::cpu::Variant::Cmos {
+        0xFF
+    } else {
+        0
+    };
     cpu.regs.wz = cpu.regs.bc().wrapping_add(1);
 }
 

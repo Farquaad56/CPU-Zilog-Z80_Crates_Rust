@@ -43,8 +43,8 @@ impl Cpu {
     /// WZ = 0, not halted, and the engine back at an instruction boundary.
     ///
     /// The other registers (BC DE HL IX IY and the shadow set) are left unchanged, as on the NMOS
-    /// chip. UNKNOWN - to confirm (Q-001): the real values of the undefined registers after a
-    /// power-on RESET.
+    /// chip (decision D-028 for Q-001: the real values of the undefined registers after a
+    /// power-on RESET are not specified by Zilog, so nothing is invented).
     pub fn reset(&mut self) {
         self.regs.pc = 0;
         self.regs.i = 0;
@@ -135,7 +135,8 @@ impl Cpu {
     pub(crate) fn start_int(&mut self) {
         self.eng.irq = IrqKind::Int;
         // NMOS bug: an INT accepted right after LD A,I / LD A,R resets P/V (D-006).
-        if self.eng.last_ld_air {
+        // The CMOS variant does not have it.
+        if self.eng.last_ld_air && self.variant == crate::cpu::Variant::Nmos {
             self.regs.f &= !flag::PV;
         }
         // IM 0 runs the same plan as IM 1; its hook decodes the byte read on the bus.

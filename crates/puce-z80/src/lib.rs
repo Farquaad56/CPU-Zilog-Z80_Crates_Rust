@@ -51,7 +51,7 @@ extern crate std;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub use bus::{Bus, Cycle, SimpleRam};
-pub use cpu::Cpu;
+pub use cpu::{Cpu, Variant};
 pub use pins::Pins;
 pub use regs::Regs;
 

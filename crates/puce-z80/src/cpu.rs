@@ -21,8 +21,28 @@ static DDCB_HEAD: [Tok; 4] = [
     Tok::new(Kind::R, 5, Addr::PcInc, Reg::Op, false),
 ];
 
+/// Which silicon is emulated.
+///
+/// The differences are the documented NMOS / CMOS ones:
+///
+/// | | `Nmos` | `Cmos` |
+/// |---|---|---|
+/// | `OUT (C),0` (ED 71) | writes 0x00 | writes 0xFF |
+/// | `LD A,I` / `LD A,R` followed by INT | P/V is reset (bug) | no bug |
+/// | `SCF` / `CCF` bits 3 and 5 | `A or (F xor Q)` | `A or F` (no Q) |
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Variant {
+    /// NMOS Zilog Z80 (default): the behaviour of the original silicon.
+    #[default]
+    Nmos,
+    /// CMOS Z80 (for example Zilog Z84C00).
+    Cmos,
+}
+
 /// The Z80 CPU state: registers plus execution engine.
 pub struct Cpu {
+    /// Emulated variant (NMOS by default).
+    pub(crate) variant: Variant,
     /// Register file (public for inspection).
     pub regs: Regs,
     /// Execution engine (internal).
@@ -40,6 +60,7 @@ impl Cpu {
     /// (AF = SP = 0xFFFF, PC = 0, engine idle).
     pub fn new() -> Cpu {
         let mut cpu = Cpu {
+            variant: Variant::Nmos,
             regs: Regs::default(),
             eng: Engine::new(),
             #[cfg(feature = "inspect")]
@@ -49,6 +70,18 @@ impl Cpu {
         };
         cpu.reset();
         cpu
+    }
+
+    /// Create a CPU of the given variant, in its power-on state (see [`Cpu::new`]).
+    pub fn with_variant(variant: Variant) -> Cpu {
+        let mut cpu = Cpu::new();
+        cpu.variant = variant;
+        cpu
+    }
+
+    /// The emulated variant.
+    pub fn variant(&self) -> Variant {
+        self.variant
     }
 
     /// Returns true when the CPU is at an instruction boundary (not mid-instruction).
