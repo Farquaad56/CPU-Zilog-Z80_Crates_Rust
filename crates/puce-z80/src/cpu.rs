@@ -126,6 +126,7 @@ impl Cpu {
             // Reset f_written at instruction start
             self.eng.f_written = false;
             self.eng.wz_post = None;
+            self.eng.wz_start = self.regs.wz;
             // HALT: the next 'instruction' is an M1 NOP cycle at PC (E09-02).
             self.eng.halt_cycle = self.regs.halted;
             // Interrupt acceptance at the instruction boundary, before the normal fetch.

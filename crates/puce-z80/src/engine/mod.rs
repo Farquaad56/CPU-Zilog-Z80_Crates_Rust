@@ -73,6 +73,8 @@ pub(crate) struct Engine {
     pub bus_granted: bool,
     /// WZ value to apply when the current instruction completes (after its last bus cycle).
     pub wz_post: Option<u16>,
+    /// WZ at the start of the current instruction (LD rp,nn leaves WZ unchanged).
+    pub wz_start: u16,
     /// Set by LD A,I / LD A,R while they run (moved to `last_ld_air` at the next boundary).
     pub ld_air_now: bool,
     /// True if the last completed instruction was LD A,I or LD A,R (NMOS INT bug, E10-04).
@@ -126,6 +128,7 @@ impl Engine {
             int_seq: false,
             bus_granted: false,
             wz_post: None,
+            wz_start: 0,
             ld_air_now: false,
             last_ld_air: false,
         }

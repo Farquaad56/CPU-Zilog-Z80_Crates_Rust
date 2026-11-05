@@ -52,7 +52,8 @@ fn e10_03_pop_af_q() {
     ram.write(0x8001, 0x12);
     cpu.step(&mut ram);
     assert_eq!(cpu.regs.f, 0xD7);
-    assert_eq!(cpu.regs.q, 0xD7, "POP AF writes F, so Q = F");
+    // SingleStepTests (E13-09, 1000 cases): POP AF loads F from the stack but leaves Q = 0.
+    assert_eq!(cpu.regs.q, 0, "POP AF does not produce Q");
 }
 
 #[test]

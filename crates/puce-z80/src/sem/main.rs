@@ -140,6 +140,8 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
     if x == 0 && z == 1 && y & 1 == 0 {
         let p = y >> 1;
         set_rp(cpu, p, cpu.regs.wz);
+        // The operand travels through WZ but the instruction leaves WZ unchanged.
+        cpu.eng.wz_post = Some(cpu.eng.wz_start);
     }
 
     // LD (nn),HL / LD HL,(nn) family (opcodes with x=0, z=2, y=4 or y=5)
@@ -394,7 +396,8 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
         let p = y >> 1;
         if p == 3 {
             cpu.regs.a = cpu.eng.tmp_h;
-            set_f(cpu, cpu.eng.tmp_l);
+            // POP AF loads F from the stack: it is not an ALU result, so Q stays 0.
+            cpu.regs.f = cpu.eng.tmp_l;
         } else {
             set_rp2(cpu, p, ((cpu.eng.tmp_h as u16) << 8) | cpu.eng.tmp_l as u16);
         }
