@@ -307,10 +307,29 @@ mod tests {
     const SPIN: [u8; 2] = [0x18, 0xFE];
 
     fn server() -> (crate::http::Server, std::net::SocketAddr) {
-        let ctx = Arc::new(Ctx::new(PathBuf::from("no-such-roms-dir")));
+        server_with(PathBuf::from("no-such-roms-dir"))
+    }
+
+    fn server_with(roms: PathBuf) -> (crate::http::Server, std::net::SocketAddr) {
+        let ctx = Arc::new(Ctx::new(roms));
         let srv = start_with(0, ctx).unwrap();
         let addr = srv.addr();
         (srv, addr)
+    }
+
+    /// A temporary tree: roms/{a.com, zexdoc.cim, prelim.com, notes.txt, sub/b.bin}, x.com above.
+    fn rom_tree(tag: &str) -> PathBuf {
+        let base =
+            std::env::temp_dir().join(format!("puce_z80_web_{}_{}", std::process::id(), tag));
+        let roms = base.join("roms");
+        std::fs::create_dir_all(roms.join("sub")).unwrap();
+        std::fs::write(roms.join("a.com"), PRINT_A).unwrap();
+        std::fs::write(roms.join("zexdoc.cim"), PRINT_A).unwrap();
+        std::fs::write(roms.join("prelim.com"), PRINT_A).unwrap();
+        std::fs::write(roms.join("notes.txt"), b"ignored").unwrap();
+        std::fs::write(roms.join("sub").join("b.bin"), [0x3E, 0x07, 0x76]).unwrap();
+        std::fs::write(base.join("x.com"), PRINT_A).unwrap();
+        roms
     }
 
     fn connect(addr: std::net::SocketAddr) -> Client {
@@ -446,5 +465,106 @@ mod tests {
         }
         assert!((10..=31).contains(&count), "{} states in one second", count);
         send(&mut ws, r#"{"cmd":"pause"}"#);
+    }
+
+    fn rom<'a>(roms: &'a Value, name: &str) -> Option<&'a Value> {
+        roms["roms"].as_array()?.iter().find(|r| r["name"] == name)
+    }
+
+    #[test]
+    fn e14_05_list_finds_roms() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = rom_tree("list");
+        let (_srv, addr) = server_with(dir.clone());
+        let mut ws = connect(addr);
+        send(&mut ws, r#"{"cmd":"list_roms"}"#);
+        let r = recv(&mut ws);
+        assert_eq!(r["type"], "roms");
+        assert_eq!(r["roms"].as_array().unwrap().len(), 4, "{}", r);
+        assert_eq!(rom(&r, "a.com").unwrap()["size"], 10);
+        assert_eq!(rom(&r, "a.com").unwrap()["total_tests"], 0);
+        assert_eq!(rom(&r, "zexdoc.cim").unwrap()["total_tests"], 67);
+        assert_eq!(rom(&r, "prelim.com").unwrap()["total_tests"], 1);
+        assert!(rom(&r, "sub/b.bin").is_some());
+        assert!(rom(&r, "notes.txt").is_none());
+        std::fs::remove_dir_all(dir.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn e14_05_load_ok() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = rom_tree("load");
+        let (_srv, addr) = server_with(dir.clone());
+        let mut ws = connect(addr);
+        send(&mut ws, r#"{"cmd":"load","name":"a.com"}"#);
+        let s = recv_state_where(&mut ws, |v| v["rom"]["name"] == "a.com");
+        assert_eq!(s["rom"]["kind"], "cpm");
+        assert_eq!(s["rom"]["size"], 10);
+        assert_eq!(s["status"], "idle");
+        assert_eq!(s["regs"]["pc"], 0x0100);
+        std::fs::remove_dir_all(dir.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn e14_05_path_traversal_rejected() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = rom_tree("trav");
+        let (_srv, addr) = server_with(dir.clone());
+        let mut ws = connect(addr);
+        for name in [
+            "../x.com",
+            "sub/../../x.com",
+            "/x.com",
+            "..\\x.com",
+            "missing.com",
+        ] {
+            let msg = serde_json::json!({"cmd": "load", "name": name}).to_string();
+            send(&mut ws, &msg);
+            let r = recv(&mut ws);
+            assert_eq!(r["type"], "error", "{} was not rejected: {}", name, r);
+        }
+        std::fs::remove_dir_all(dir.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn e14_05_upload_b64() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let (_srv, addr) = server();
+        let mut ws = connect(addr);
+        upload(&mut ws, &PRINT_A);
+        let s = recv_state_where(&mut ws, |v| v["rom"]["name"] == "t.com");
+        assert_eq!(s["rom"]["size"], 10);
+        send(
+            &mut ws,
+            r#"{"cmd":"upload","name":"bad.com","data_b64":"***"}"#,
+        );
+        assert_eq!(recv(&mut ws)["type"], "error");
+    }
+
+    #[test]
+    fn e14_05_upload_too_big() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let (_srv, addr) = server();
+        let mut ws = connect(addr);
+        upload(&mut ws, &vec![0u8; (1 << 20) + 1]);
+        let r = recv(&mut ws);
+        assert_eq!(r["type"], "error", "{}", r);
+        assert!(r["message"].as_str().unwrap().contains("limit"));
+    }
+
+    #[test]
+    fn e14_05_raw_kind() {
+        let _g = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = rom_tree("raw");
+        let (_srv, addr) = server_with(dir.clone());
+        let mut ws = connect(addr);
+        send(&mut ws, r#"{"cmd":"load","name":"sub/b.bin"}"#);
+        let s = recv_state_where(&mut ws, |v| v["rom"]["name"] == "sub/b.bin");
+        assert_eq!(s["rom"]["kind"], "raw");
+        assert_eq!(s["regs"]["pc"], 0);
+        send(&mut ws, r#"{"cmd":"run"}"#);
+        let s = recv_state_where(&mut ws, |v| v["status"] == "halted");
+        assert_eq!(s["regs"]["af"].as_u64().unwrap() >> 8, 7);
+        std::fs::remove_dir_all(dir.parent().unwrap()).ok();
     }
 }

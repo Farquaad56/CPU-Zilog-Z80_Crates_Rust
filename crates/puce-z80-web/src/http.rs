@@ -23,10 +23,14 @@ const READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// Largest accepted request head.
 const MAX_HEAD: usize = 16 * 1024;
 
-/// Largest program accepted (a CP/M program lives between 0100h and FFFFh).
-const MAX_PROGRAM: usize = 0xFF00;
+/// Largest file accepted from the page (1 MiB).
+const MAX_UPLOAD: usize = 1 << 20;
+/// Largest CP/M program (it lives between 0100h and FFFFh).
+const MAX_COM: usize = 0xFF00;
+/// Largest raw image (all of memory).
+const MAX_RAW: usize = 0x10000;
 /// Directory levels searched for ROMs.
-const MAX_DEPTH: usize = 4;
+const MAX_DEPTH: usize = 3;
 
 /// What every client of the server shares: the simulation and the ROM directory.
 pub struct Ctx {
@@ -91,9 +95,11 @@ impl Ctx {
             .into_iter()
             .map(|(name, size)| {
                 let stem = name.rsplit('/').next().unwrap_or("").to_ascii_lowercase();
-                // The two Z80 exercisers print 67 result lines.
+                // Result lines printed by each suite (hard-coded by file name).
                 let total = if stem.starts_with("zexdoc") || stem.starts_with("zexall") {
                     67
+                } else if stem.starts_with("prelim") {
+                    1
                 } else {
                     0
                 };
@@ -130,12 +136,26 @@ fn program(name: &str, bytes: Vec<u8>) -> Result<Command, String> {
     if bytes.is_empty() {
         return Err(format!("'{}' is empty", name));
     }
-    if bytes.len() > MAX_PROGRAM {
+    if bytes.len() > MAX_UPLOAD {
         return Err(format!(
-            "'{}' is {} bytes: at most {} fit in memory",
+            "'{}' is {} bytes: the limit is {} (1 MiB)",
             name,
             bytes.len(),
-            MAX_PROGRAM
+            MAX_UPLOAD
+        ));
+    }
+    let (limit, what) = if name.to_ascii_lowercase().ends_with(".bin") {
+        (MAX_RAW, "a raw image")
+    } else {
+        (MAX_COM, "a CP/M program")
+    };
+    if bytes.len() > limit {
+        return Err(format!(
+            "'{}' is {} bytes: {} holds at most {}",
+            name,
+            bytes.len(),
+            what,
+            limit
         ));
     }
     Ok(Command::Load {
