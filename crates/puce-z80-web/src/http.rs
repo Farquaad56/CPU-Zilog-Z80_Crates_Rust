@@ -3,8 +3,11 @@
 //! Plain `std::net` (no HTTP crate): a request is a head ending with an empty line, an answer
 //! carries a Content-Length and closes the connection. `/ws` is added by the WebSocket part.
 
+use base64::Engine;
+use puce_z80_machines::session::{Command, Session};
 use std::io::{Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -19,6 +22,127 @@ const POLL: Duration = Duration::from_millis(10);
 const READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// Largest accepted request head.
 const MAX_HEAD: usize = 16 * 1024;
+
+/// Largest program accepted (a CP/M program lives between 0100h and FFFFh).
+const MAX_PROGRAM: usize = 0xFF00;
+/// Directory levels searched for ROMs.
+const MAX_DEPTH: usize = 4;
+
+/// What every client of the server shares: the simulation and the ROM directory.
+pub struct Ctx {
+    /// The simulation session.
+    pub session: Session,
+    /// Root of the ROM files.
+    pub roms_dir: PathBuf,
+}
+
+impl Ctx {
+    /// A fresh session and the ROM directory to list.
+    pub fn new(roms_dir: PathBuf) -> Ctx {
+        Ctx {
+            session: Session::spawn(),
+            roms_dir,
+        }
+    }
+
+    /// ROM files (`.com`, `.cim`, `.bin`) below the ROM directory: (name, size).
+    pub fn list_roms(&self) -> Vec<(String, u64)> {
+        fn walk(root: &Path, dir: &Path, depth: usize, out: &mut Vec<(String, u64)>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for e in entries.flatten() {
+                let path = e.path();
+                let Ok(meta) = e.metadata() else { continue };
+                if meta.is_dir() {
+                    if depth < MAX_DEPTH {
+                        walk(root, &path, depth + 1, out);
+                    }
+                    continue;
+                }
+                let ext = path
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                if !["com", "cim", "bin"].contains(&ext.as_str()) {
+                    continue;
+                }
+                if let Ok(rel) = path.strip_prefix(root) {
+                    let name = rel
+                        .components()
+                        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                        .collect::<Vec<_>>()
+                        .join("/");
+                    out.push((name, meta.len()));
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(&self.roms_dir, &self.roms_dir, 0, &mut out);
+        out.sort();
+        out
+    }
+
+    /// The `roms` message.
+    pub fn roms_message(&self) -> String {
+        let roms: Vec<_> = self
+            .list_roms()
+            .into_iter()
+            .map(|(name, size)| {
+                let stem = name.rsplit('/').next().unwrap_or("").to_ascii_lowercase();
+                // The two Z80 exercisers print 67 result lines.
+                let total = if stem.starts_with("zexdoc") || stem.starts_with("zexall") {
+                    67
+                } else {
+                    0
+                };
+                serde_json::json!({"name": name, "size": size, "total_tests": total})
+            })
+            .collect();
+        serde_json::json!({"type": "roms", "roms": roms}).to_string()
+    }
+
+    /// The `Load` command for a ROM that `list_roms` knows.
+    pub fn load_listed(&self, name: &str) -> Result<Command, String> {
+        if !self.list_roms().iter().any(|(n, _)| n == name) {
+            return Err(format!("unknown ROM '{}'", name));
+        }
+        let path = self.roms_dir.join(name);
+        let bytes =
+            std::fs::read(&path).map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
+        program(name, bytes)
+    }
+
+    /// The `Load` command for bytes sent by the page.
+    pub fn upload(&self, name: &str, data_b64: &str) -> Result<Command, String> {
+        if name.is_empty() || name.len() > 128 {
+            return Err("upload needs a name of 1 to 128 characters".to_string());
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(data_b64.trim())
+            .map_err(|e| format!("data_b64 is not valid base64: {}", e))?;
+        program(name, bytes)
+    }
+}
+
+fn program(name: &str, bytes: Vec<u8>) -> Result<Command, String> {
+    if bytes.is_empty() {
+        return Err(format!("'{}' is empty", name));
+    }
+    if bytes.len() > MAX_PROGRAM {
+        return Err(format!(
+            "'{}' is {} bytes: at most {} fit in memory",
+            name,
+            bytes.len(),
+            MAX_PROGRAM
+        ));
+    }
+    Ok(Command::Load {
+        name: name.to_string(),
+        bytes,
+    })
+}
 
 /// A running HTTP server.
 pub struct Server {
@@ -53,8 +177,13 @@ impl Drop for Server {
     }
 }
 
-/// Start listening on `127.0.0.1:port` (0 picks a free port).
+/// Start listening on `127.0.0.1:port` (0 picks a free port) with the default ROM directory.
 pub fn start(port: u16) -> Result<Server, String> {
+    start_with(port, Arc::new(Ctx::new(PathBuf::from("tests/roms"))))
+}
+
+/// Start listening on `127.0.0.1:port` for the given shared state.
+pub fn start_with(port: u16, ctx: Arc<Ctx>) -> Result<Server, String> {
     let listener = TcpListener::bind(("127.0.0.1", port))
         .map_err(|e| format!("cannot listen on 127.0.0.1:{}: {}", port, e))?;
     let addr = listener
@@ -69,7 +198,8 @@ pub fn start(port: u16) -> Result<Server, String> {
         while !flag.load(Ordering::SeqCst) {
             match listener.accept() {
                 Ok((stream, _)) => {
-                    std::thread::spawn(move || serve(stream));
+                    let ctx = Arc::clone(&ctx);
+                    std::thread::spawn(move || serve(stream, ctx));
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(POLL),
                 Err(_) => break,
@@ -113,7 +243,7 @@ fn respond(stream: &mut TcpStream, status: &str, content_type: &str, body: &str)
 }
 
 /// Answer one connection.
-fn serve(mut stream: TcpStream) {
+fn serve(mut stream: TcpStream, ctx: Arc<Ctx>) {
     let _ = stream.set_nonblocking(false);
     let _ = stream.set_read_timeout(Some(READ_TIMEOUT));
     let Some(head) = read_head(&mut stream) else {
@@ -123,6 +253,27 @@ fn serve(mut stream: TcpStream) {
     let method = line.next().unwrap_or("");
     let target = line.next().unwrap_or("");
     let path = target.split('?').next().unwrap_or("");
+    let header = |name: &str| -> Option<String> {
+        head.lines().skip(1).find_map(|l| {
+            let (k, v) = l.split_once(':')?;
+            k.trim()
+                .eq_ignore_ascii_case(name)
+                .then(|| v.trim().to_string())
+        })
+    };
+    if method == "GET" && path == "/ws" {
+        let upgrade = header("upgrade").unwrap_or_default().to_ascii_lowercase();
+        match (upgrade.as_str(), header("sec-websocket-key")) {
+            ("websocket", Some(key)) => crate::ws::serve_client(stream, &key, ctx),
+            _ => respond(
+                &mut stream,
+                "400 Bad Request",
+                "text/plain",
+                "a WebSocket upgrade is expected on /ws",
+            ),
+        }
+        return;
+    }
     match (method, path) {
         ("GET", "/") | ("GET", "/index.html") => respond(
             &mut stream,
@@ -138,17 +289,17 @@ fn serve(mut stream: TcpStream) {
     }
 }
 
+/// Tests that open sockets run one at a time: simultaneous loopback connections from several
+/// tests are sometimes reset on the Windows development host.
+#[cfg(test)]
+pub(crate) static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(test)]
 mod tests {
+    use super::ONE_AT_A_TIME;
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpStream;
-    use std::sync::Mutex;
-
-    /// On the Windows development host, simultaneous loopback connections from several tests
-    /// are sometimes reset before the answer arrives (also with other HTTP servers, and with
-    /// the lingering close); the tests therefore run one at a time.
-    static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
 
     /// Minimal HTTP client: returns (status line, body). It stops reading once the announced
     /// Content-Length has arrived, so a reset after the answer does not matter.
