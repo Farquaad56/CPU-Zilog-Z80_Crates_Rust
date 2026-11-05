@@ -8,6 +8,22 @@ use crate::alu;
 use crate::cpu::Cpu;
 use crate::regs::flag;
 
+/// SCF / CCF take bits 3 and 5 of F from `A | (F ^ Q)` (NMOS Zilog) when true, from `A` alone
+/// (simple reference model) when false.
+/// UNKNOWN - to confirm: the final choice is made in E13-05 / E13-17 (ZEXALL, z80ccf).
+/// Currently false: the DD/FD differential vectors (JS reference) use the simple model;
+/// see docs/qa/inbox/E10-03-Q1.md.
+pub(crate) const SCF_CCF_USES_Q: bool = false;
+
+/// Bits 3 and 5 of F set by SCF / CCF, from A and the previous F / Q.
+fn scf_ccf_xy(a: u8, old_f: u8, q: u8) -> u8 {
+    if SCF_CCF_USES_Q {
+        (a | (old_f ^ q)) & 0x28
+    } else {
+        a & 0x28
+    }
+}
+
 /// Execute main-table instruction semantics.
 pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
     if hook_no != 0 {
@@ -331,20 +347,24 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
                 set_f(cpu, flags);
             }
 
-            // SCF: C=1, H=N=0, S Z P/V unchanged, X Y from A (reference model)
+            // SCF: C=1, H=N=0, S Z P/V unchanged, X Y from A | (F ^ Q) (see SCF_CCF_USES_Q)
             6 => {
-                let flags = (old_f & (flag::S | flag::Z | flag::PV)) | flag::C | (a & 0x28);
+                let flags = (old_f & (flag::S | flag::Z | flag::PV))
+                    | flag::C
+                    | scf_ccf_xy(a, old_f, cpu.regs.q);
                 set_f(cpu, flags);
             }
 
-            // CCF: H = old C, C = !old C, N=0, S Z P/V unchanged, X Y from A
+            // CCF: H = old C, C = !old C, N=0, S Z P/V unchanged, X Y from A | (F ^ Q)
             7 => {
                 let c_or_h = if old_f & flag::C != 0 {
                     flag::H
                 } else {
                     flag::C
                 };
-                let flags = (old_f & (flag::S | flag::Z | flag::PV)) | c_or_h | (a & 0x28);
+                let flags = (old_f & (flag::S | flag::Z | flag::PV))
+                    | c_or_h
+                    | scf_ccf_xy(a, old_f, cpu.regs.q);
                 set_f(cpu, flags);
             }
             _ => {}
@@ -711,5 +731,76 @@ mod tests {
         sem_main(&mut cpu, 0xD3, 0);
         // UNKNOWN - to confirm: Z stays n (0x7F) until a post-bus hook exists; W = A.
         assert_eq!(cpu.regs.wz, 0x567F);
+    }
+
+    #[test]
+    fn e10_03_const_switch() {
+        // With Q: X/Y = A | (F ^ Q); without: A alone. The switch picks between the two.
+        let with_q = 0x28u8;
+        let simple = 0u8;
+        let expected = if SCF_CCF_USES_Q { with_q } else { simple };
+        assert_eq!(scf_ccf_xy(0x00, 0x28, 0x00), expected);
+    }
+
+    /// Run `prog` (one instruction at 0x0100) with the given A, F, Q and return the CPU.
+    fn run_scf_ccf(prog: &[u8], a: u8, f: u8, q: u8) -> Cpu {
+        use crate::bus::{Bus, SimpleRam};
+        let mut ram = SimpleRam::new();
+        for (i, b) in prog.iter().enumerate() {
+            ram.write(0x0100 + i as u16, *b);
+        }
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x0100;
+        cpu.regs.a = a;
+        cpu.regs.f = f;
+        cpu.regs.q = q;
+        cpu.step(&mut ram);
+        cpu
+    }
+
+    #[test]
+    fn e10_03_scf_q_xy() {
+        // After ADD (Q = F, so F ^ Q = 0): X/Y come from A in both models.
+        use crate::bus::{Bus, SimpleRam};
+        let mut ram = SimpleRam::new();
+        ram.write(0x0100, 0x80);
+        ram.write(0x0101, 0x37);
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x0100;
+        cpu.regs.a = 0x20;
+        cpu.regs.b = 0x08;
+        cpu.step(&mut ram);
+        let (a, f, q) = (cpu.regs.a, cpu.regs.f, cpu.regs.q);
+        assert_eq!(f, q);
+        cpu.step(&mut ram);
+        assert_eq!(cpu.regs.f & 0x28, scf_ccf_xy(a, f, q));
+        assert_eq!(cpu.regs.f & 0x28, a & 0x28);
+        // Direct: Q != F makes the models differ.
+        let cpu = run_scf_ccf(&[0x37], 0x00, 0x28, 0x00);
+        assert_eq!(cpu.regs.f & 0x28, if SCF_CCF_USES_Q { 0x28 } else { 0x00 });
+        let cpu = run_scf_ccf(&[0x3F], 0x00, 0x28, 0x28);
+        assert_eq!(
+            cpu.regs.f & 0x28,
+            0x00,
+            "F ^ Q = 0 and A = 0 in both models"
+        );
+    }
+
+    #[test]
+    fn e10_03_scf_after_ld() {
+        // LD B,n does not write F: Q = 0. With the Q model SCF takes X/Y from A | F.
+        use crate::bus::{Bus, SimpleRam};
+        let mut ram = SimpleRam::new();
+        ram.write(0x0100, 0x06);
+        ram.write(0x0101, 0x00);
+        ram.write(0x0102, 0x37);
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x0100;
+        cpu.regs.a = 0x00;
+        cpu.regs.f = 0x28;
+        cpu.step(&mut ram);
+        assert_eq!(cpu.regs.q, 0);
+        cpu.step(&mut ram);
+        assert_eq!(cpu.regs.f & 0x28, if SCF_CCF_USES_Q { 0x28 } else { 0x00 });
     }
 }
