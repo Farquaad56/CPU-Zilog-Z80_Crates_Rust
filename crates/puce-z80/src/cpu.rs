@@ -99,6 +99,8 @@ impl Cpu {
             // Interrupt acceptance at the instruction boundary, before the normal fetch.
             self.eng.irq = crate::engine::IrqKind::None;
             self.eng.int_seq = false;
+            self.eng.last_ld_air = self.eng.ld_air_now;
+            self.eng.ld_air_now = false;
             if self.eng.nmi_latch {
                 self.eng.nmi_latch = false;
                 self.start_nmi();

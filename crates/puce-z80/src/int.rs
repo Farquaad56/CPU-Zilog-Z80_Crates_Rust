@@ -66,6 +66,8 @@ impl Cpu {
         self.eng.int_seq = false;
         self.eng.bus_granted = false;
         self.eng.wz_post = None;
+        self.eng.ld_air_now = false;
+        self.eng.last_ld_air = false;
         self.eng.nmi_latch = false;
         self.eng.nmi_prev = false;
     }
