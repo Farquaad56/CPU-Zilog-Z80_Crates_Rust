@@ -531,7 +531,7 @@ function wsUrl(){return (location.protocol==='https:'?'wss://':'ws://')+(locatio
 function connect(){
   clearTimeout(reconnectT);
   try{ws=new WebSocket(wsUrl());}catch(e){reconnectT=setTimeout(connect,1000);return;}
-  ws.onopen=()=>{wsOpen=true;lastSpeedSent=-1;send({cmd:'hello'});sendView();send({cmd:'speed',idx:speedIdx});render();};
+  ws.onopen=()=>{wsOpen=true;lastSpeedSent=-1;send({cmd:'hello'});send({cmd:'list_roms'});sendView();send({cmd:'speed',idx:speedIdx});render();};
   ws.onclose=()=>{wsOpen=false;render();reconnectT=setTimeout(connect,1000);};
   ws.onerror=()=>{try{ws.close();}catch(e){}};
   ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}onMsg(m);};
