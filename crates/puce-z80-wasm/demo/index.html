@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>puce-z80 in WebAssembly</title>
+<style>body{font:14px monospace;margin:2rem}pre{background:#111;color:#8f8;padding:1rem}</style>
+<h1>puce-z80 - WebAssembly demo</h1>
+<p>Build first: <code>wasm-bindgen --target web --out-dir demo/pkg target/wasm32-unknown-unknown/release/puce_z80_wasm.wasm</code>, then serve this folder over HTTP.</p>
+<button id="run">Run the demo program</button>
+<h3>Output (port 0)</h3><pre id="out"></pre>
+<h3>Registers</h3><pre id="regs"></pre>
+<script type="module">
+import init, { Z80 } from "./pkg/puce_z80_wasm.js";
+await init();
+document.getElementById("run").onclick = () => {
+  const z = new Z80();
+  z.load_demo();
+  const t = z.run(100000);
+  document.getElementById("out").textContent = z.take_output();
+  const n = ["AF","BC","DE","HL","IX","IY","SP","PC","AF'","BC'","DE'","HL'"];
+  document.getElementById("regs").textContent =
+    n.map((k, i) => k + "=" + z.regs()[i].toString(16).padStart(4, "0")).join("  ") + "\n" + t + " T-states, halted=" + z.halted();
+};
+</script>
