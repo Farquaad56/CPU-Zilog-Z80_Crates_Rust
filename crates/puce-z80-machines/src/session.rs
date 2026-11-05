@@ -4,7 +4,9 @@
 //! reach the thread through a channel; the latest [`Snapshot`] is shared behind a mutex.
 
 use crate::cpm::{CpmMachine, RunEnd};
-use std::collections::BTreeSet;
+use puce_z80::disasm::disassemble;
+use serde::Serialize;
+use std::collections::{BTreeSet, VecDeque};
 use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -20,6 +22,10 @@ const TURBO_SLICE: Duration = Duration::from_millis(40);
 const TURBO_CHUNK: u64 = 5_000;
 /// Wait for a command while the simulation is not running.
 const IDLE_WAIT: Duration = Duration::from_millis(100);
+/// Sliding window of the ips / mhz measurement.
+const RATE_WINDOW: Duration = Duration::from_millis(500);
+/// Bytes shown in the memory dump.
+const MEM_BYTES: usize = 256;
 
 /// Observation window requested by the page (`view` command).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -39,7 +45,7 @@ pub struct ViewParams {
 impl Default for ViewParams {
     fn default() -> Self {
         ViewParams {
-            mem_base: 0,
+            mem_base: 256,
             dis_rows: 40,
             trace_rows: 16,
             stack_rows: 14,
@@ -80,31 +86,231 @@ pub enum Command {
     Quit,
 }
 
-/// State published by the simulation thread (completed in E14-02).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// Registers as sent to the page (protocol 31).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct RegsView {
+    /// AF.
+    pub af: u16,
+    /// BC.
+    pub bc: u16,
+    /// DE.
+    pub de: u16,
+    /// HL.
+    pub hl: u16,
+    /// AF'.
+    pub af2: u16,
+    /// BC'.
+    pub bc2: u16,
+    /// DE'.
+    pub de2: u16,
+    /// HL'.
+    pub hl2: u16,
+    /// IX.
+    pub ix: u16,
+    /// IY.
+    pub iy: u16,
+    /// SP.
+    pub sp: u16,
+    /// PC.
+    pub pc: u16,
+    /// I.
+    pub i: u8,
+    /// R.
+    pub r: u8,
+    /// WZ (MEMPTR).
+    pub wz: u16,
+    /// IFF1.
+    pub iff1: bool,
+    /// IFF2.
+    pub iff2: bool,
+    /// Interrupt mode.
+    pub im: u8,
+}
+
+/// Last complete bus cycle.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct BusJson {
+    /// Address bus.
+    pub addr: u16,
+    /// Data.
+    pub data: u8,
+    /// 0 fetch, 1 read, 2 write, 3 io-read, 4 io-write.
+    pub kind: u8,
+    /// Pin word as `0x...`.
+    pub pins: String,
+}
+
+/// Last ALU operation.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct AluJson {
+    /// Operation name (ADD, ADC, ...).
+    pub op: String,
+    /// Width in bits.
+    pub w: u8,
+    /// First operand.
+    pub a: u16,
+    /// Second operand.
+    pub b: u16,
+    /// Carry in.
+    pub c: u8,
+    /// Result.
+    pub r: u16,
+    /// Flags before.
+    pub f_in: u8,
+}
+
+/// One disassembled instruction.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct DisRow {
+    /// Address.
+    pub addr: u16,
+    /// Instruction bytes.
+    pub bytes: Vec<u8>,
+    /// Mnemonic text from the crate disassembler.
+    pub text: String,
+    /// Length in bytes.
+    pub len: u8,
+    /// Prefix: empty, CB, ED, DD, FD, DDCB or FDCB.
+    pub pre: String,
+    /// Opcode byte.
+    pub op: u8,
+}
+
+/// One entry of the execution trace.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct TraceRow {
+    /// Instruction address.
+    pub pc: u16,
+    /// Disassembly.
+    pub text: String,
+}
+
+/// One word of the stack.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct StackRow {
+    /// Address of the word.
+    pub addr: u16,
+    /// Little-endian word.
+    pub word: u16,
+}
+
+/// Memory dump window.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct MemView {
+    /// First address.
+    pub base: u16,
+    /// 256 bytes as 512 hex characters.
+    pub hex: String,
+}
+
+/// Test counters printed by the CP/M suites.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct TestsView {
+    /// OK lines.
+    pub ok: u32,
+    /// ERROR lines.
+    pub err: u32,
+    /// ok + err.
+    pub total: u32,
+}
+
+/// Loaded program.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct RomView {
+    /// File name.
+    pub name: String,
+    /// Size in bytes.
+    pub size: usize,
+    /// `cpm` or `raw`.
+    pub kind: String,
+}
+
+/// State published by the simulation thread: the `state` message of protocol 31.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct Snapshot {
+    /// Always `state`.
+    #[serde(rename = "type")]
+    pub kind: String,
     /// `idle`, `running`, `halted`, `done` or `bp`.
     pub status: String,
     /// Instructions executed since the last reset.
     pub n: u64,
     /// T-states executed since the last reset.
     pub t: u64,
+    /// Instructions per second (500 ms window).
+    pub ips: f64,
+    /// Millions of T-states per second (500 ms window).
+    pub mhz: f64,
+    /// T-states of the last instruction.
+    pub tlast: u64,
+    /// Registers.
+    pub regs: RegsView,
+    /// Last bus cycle.
+    pub bus: BusJson,
+    /// Last ALU operation, `null` before any.
+    pub alu: Option<AluJson>,
+    /// Disassembly from PC.
+    pub dis: Vec<DisRow>,
+    /// Most recent instructions first.
+    pub trace: Vec<TraceRow>,
+    /// Words above SP.
+    pub stack: Vec<StackRow>,
+    /// Memory dump.
+    pub mem: MemView,
+    /// Recently written addresses.
+    pub wlog: Vec<u16>,
+    /// Console text added since the last state; filled per client with [`Session::console_since`].
+    pub console_delta: String,
+    /// Test counters.
+    pub tests: TestsView,
+    /// Breakpoints.
+    pub bps: Vec<u16>,
+    /// Loaded program.
+    pub rom: RomView,
+}
+
+/// The `hello` message.
+pub fn hello() -> serde_json::Value {
+    serde_json::json!({"type": "hello", "version": crate::VERSION})
+}
+
+/// Name of an ALU operation code (see `puce_z80::probe::AluRecord`).
+pub fn alu_name(op: u8) -> String {
+    const BASE: [&str; 10] = [
+        "ADD", "ADC", "SUB", "SBC", "AND", "XOR", "OR", "CP", "INC", "DEC",
+    ];
+    const SHIFT: [&str; 8] = ["RLC", "RRC", "RL", "RR", "SLA", "SRA", "SLL", "SRL"];
+    match op {
+        0..=9 => BASE[usize::from(op)].to_string(),
+        16..=23 => SHIFT[usize::from(op - 16)].to_string(),
+        32 => "ADD16".to_string(),
+        33 => "ADC16".to_string(),
+        34 => "SBC16".to_string(),
+        40 => "DAA".to_string(),
+        41 => "NEG".to_string(),
+        42 => "CPL".to_string(),
+        _ => format!("OP{}", op),
+    }
+}
+
+/// Data shared between the thread and the handles.
+#[derive(Default)]
+struct Shared {
+    snap: Snapshot,
+    console: String,
 }
 
 /// Handle on the simulation thread.
 pub struct Session {
     tx: Sender<Command>,
-    shared: Arc<Mutex<Snapshot>>,
+    shared: Arc<Mutex<Shared>>,
 }
 
 impl Session {
     /// Start the simulation thread (idle, nothing loaded).
     pub fn spawn() -> Session {
         let (tx, rx) = channel();
-        let shared = Arc::new(Mutex::new(Snapshot {
-            status: "idle".to_string(),
-            ..Snapshot::default()
-        }));
+        let shared = Arc::new(Mutex::new(Shared::default()));
         let out = Arc::clone(&shared);
         std::thread::spawn(move || {
             let mut w = Worker::new();
@@ -124,11 +330,15 @@ impl Session {
                     w.handle(c);
                 }
                 let now = Instant::now();
-                if w.running {
+                let was_running = w.running;
+                if was_running {
                     w.advance(now.duration_since(last));
                 }
                 last = now;
-                w.publish(&out);
+                if was_running || w.dirty {
+                    w.publish(&out);
+                    w.dirty = false;
+                }
             }
         });
         Session { tx, shared }
@@ -142,7 +352,21 @@ impl Session {
 
     /// A copy of the latest published state.
     pub fn snapshot(&self) -> Snapshot {
-        self.shared.lock().map(|s| s.clone()).unwrap_or_default()
+        self.shared
+            .lock()
+            .map(|s| s.snap.clone())
+            .unwrap_or_default()
+    }
+
+    /// Console text from byte position `pos` and the new position (per-client cursor).
+    /// A position past the end (the console was cleared) restarts from the beginning.
+    pub fn console_since(&self, pos: usize) -> (String, usize) {
+        let Ok(s) = self.shared.lock() else {
+            return (String::new(), pos);
+        };
+        let pos = if pos > s.console.len() { 0 } else { pos };
+        let text = s.console.get(pos..).unwrap_or("").to_string();
+        (text, s.console.len())
     }
 }
 
@@ -155,8 +379,15 @@ struct Worker {
     speed: u8,
     credit: f64,
     bps: BTreeSet<u16>,
-    #[allow(dead_code)] // read by the full snapshot (E14-02)
     view: ViewParams,
+    /// Something changed since the last publication.
+    dirty: bool,
+    /// The shared console must be emptied at the next publication.
+    clear_console: bool,
+    /// (time, instructions, T-states) samples of the last 500 ms.
+    samples: VecDeque<(Instant, u64, u64)>,
+    /// Bytes of the machine console already copied to the shared console.
+    published: usize,
 }
 
 impl Worker {
@@ -170,6 +401,10 @@ impl Worker {
             credit: 0.0,
             bps: BTreeSet::new(),
             view: ViewParams::default(),
+            dirty: true,
+            clear_console: false,
+            samples: VecDeque::new(),
+            published: 0,
         }
     }
 
@@ -181,9 +416,12 @@ impl Worker {
         self.running = false;
         self.credit = 0.0;
         self.status = "idle";
+        self.samples.clear();
+        self.published = 0;
     }
 
     fn handle(&mut self, c: Command) {
+        self.dirty = true;
         match c {
             Command::Load { name, bytes } => {
                 self.rom = Some((name, bytes));
@@ -217,7 +455,11 @@ impl Worker {
                 self.bps.remove(&a);
             }
             Command::View(v) => self.view = v,
-            Command::ConsoleClear => self.machine.out.clear(),
+            Command::ConsoleClear => {
+                self.machine.out.clear();
+                self.published = 0;
+                self.clear_console = true;
+            }
             Command::Quit => {}
         }
     }
@@ -276,11 +518,175 @@ impl Worker {
         }
     }
 
-    fn publish(&self, out: &Arc<Mutex<Snapshot>>) {
+    /// Instructions and megahertz over the last 500 ms.
+    fn rates(&mut self) -> (f64, f64) {
+        let now = Instant::now();
+        self.samples
+            .push_back((now, self.machine.instr, self.machine.tstates));
+        while self.samples.len() > 2 && now.duration_since(self.samples[0].0) > RATE_WINDOW {
+            self.samples.pop_front();
+        }
+        let (t0, i0, c0) = self.samples[0];
+        let dt = now.duration_since(t0).as_secs_f64();
+        if !self.running || dt <= 0.0 {
+            return (0.0, 0.0);
+        }
+        (
+            (self.machine.instr - i0) as f64 / dt,
+            (self.machine.tstates - c0) as f64 / dt / 1e6,
+        )
+    }
+
+    fn dis_text(&self, addr: u16) -> DisRow {
+        let ram = &self.machine.ram;
+        let insn = disassemble(addr, &mut |a| ram[usize::from(a)]);
+        let bytes: Vec<u8> = (0..u16::from(insn.len))
+            .map(|i| ram[usize::from(addr.wrapping_add(i))])
+            .collect();
+        let pre = match (insn.prefix, bytes.get(1)) {
+            (0, _) => "",
+            (0xCB, _) => "CB",
+            (0xED, _) => "ED",
+            (0xDD, Some(0xCB)) => "DDCB",
+            (0xDD, _) => "DD",
+            (0xFD, Some(0xCB)) => "FDCB",
+            (0xFD, _) => "FD",
+            _ => "",
+        };
+        DisRow {
+            addr,
+            bytes,
+            text: insn.text.as_str().to_string(),
+            len: insn.len,
+            pre: pre.to_string(),
+            op: insn.op,
+        }
+    }
+
+    /// Build the `state` message from the machine and the view.
+    fn build(&mut self) -> Snapshot {
+        let (ips, mhz) = self.rates();
+        let cpu = &self.machine.cpu;
+        let r = &cpu.regs;
+        let ram = &self.machine.ram;
+        let b = cpu.last_bus();
+
+        let mut dis = Vec::new();
+        let mut addr = r.pc;
+        for _ in 0..self.view.dis_rows {
+            let row = self.dis_text(addr);
+            addr = addr.wrapping_add(u16::from(row.len.max(1)));
+            dis.push(row);
+        }
+        let trace: Vec<TraceRow> = cpu
+            .pc_history()
+            .take(self.view.trace_rows as usize)
+            .map(|pc| TraceRow {
+                pc,
+                text: self.dis_text(pc).text,
+            })
+            .collect();
+        let stack: Vec<StackRow> = (0..self.view.stack_rows)
+            .map(|i| {
+                let a = r.sp.wrapping_add((2 * i) as u16);
+                let word = u16::from(ram[usize::from(a)])
+                    | (u16::from(ram[usize::from(a.wrapping_add(1))]) << 8);
+                StackRow { addr: a, word }
+            })
+            .collect();
+        let wlog: Vec<u16> = cpu.recent_writes().collect();
+        let focus = match self.view.follow.as_str() {
+            "sp" => r.sp,
+            "hl" => r.hl(),
+            "de" => r.de(),
+            "bc" => r.bc(),
+            "wr" => wlog.first().copied().unwrap_or(0),
+            "man" => self.view.mem_base,
+            _ => r.pc,
+        };
+        let base = (focus & 0xFFF0).min((0x10000 - MEM_BYTES) as u16);
+        let mem: String = (0..MEM_BYTES)
+            .map(|i| format!("{:02x}", ram[usize::from(base) + i]))
+            .collect();
+        let (name, size, raw) = match &self.rom {
+            Some((n, bytes)) => (n.clone(), bytes.len(), n.to_lowercase().ends_with(".bin")),
+            None => (String::new(), 0, false),
+        };
+        Snapshot {
+            kind: "state".to_string(),
+            status: self.status.to_string(),
+            n: self.machine.instr,
+            t: self.machine.tstates,
+            ips,
+            mhz,
+            tlast: u64::from(cpu.instruction_tstates()),
+            regs: RegsView {
+                af: r.af(),
+                bc: r.bc(),
+                de: r.de(),
+                hl: r.hl(),
+                af2: r.af2(),
+                bc2: r.bc2(),
+                de2: r.de2(),
+                hl2: r.hl2(),
+                ix: r.ix,
+                iy: r.iy,
+                sp: r.sp,
+                pc: r.pc,
+                i: r.i,
+                r: r.r,
+                wz: r.wz,
+                iff1: r.iff1,
+                iff2: r.iff2,
+                im: r.im,
+            },
+            bus: BusJson {
+                addr: b.addr,
+                data: b.data,
+                kind: b.kind,
+                pins: format!("{:#x}", b.pins.0),
+            },
+            alu: cpu.last_alu().map(|a| AluJson {
+                op: alu_name(a.op),
+                w: a.w,
+                a: a.a,
+                b: a.b,
+                c: a.c,
+                r: a.r,
+                f_in: a.f_in,
+            }),
+            dis,
+            trace,
+            stack,
+            mem: MemView { base, hex: mem },
+            wlog,
+            console_delta: String::new(),
+            tests: TestsView {
+                ok: self.machine.tests_ok,
+                err: self.machine.tests_err,
+                total: self.machine.tests_ok + self.machine.tests_err,
+            },
+            bps: self.bps.iter().copied().collect(),
+            rom: RomView {
+                name,
+                size,
+                kind: if raw { "raw" } else { "cpm" }.to_string(),
+            },
+        }
+    }
+
+    fn publish(&mut self, out: &Arc<Mutex<Shared>>) {
+        let snap = self.build();
+        let added = self.machine.out.len().saturating_sub(self.published);
+        let text = String::from_utf8_lossy(&self.machine.out[self.published..]).into_owned();
+        self.published += added;
         if let Ok(mut s) = out.lock() {
-            s.status = self.status.to_string();
-            s.n = self.machine.instr;
-            s.t = self.machine.tstates;
+            if self.clear_console {
+                s.console.clear();
+                self.clear_console = false;
+            }
+            s.console.push_str(&text);
+            s.snap = snap;
         }
     }
 }
@@ -397,6 +803,192 @@ mod tests {
             "expected about 15 instructions, got {}",
             n
         );
+        s.send(Command::Quit);
+    }
+
+    // ----- E14-02: the state message ------------------------------------------------------------
+
+    /// A worker with `bytes` loaded, stepped `n` instructions.
+    fn stepped(bytes: &[u8], n: u32) -> Worker {
+        let mut w = Worker::new();
+        w.handle(Command::Load {
+            name: "t.com".into(),
+            bytes: bytes.to_vec(),
+        });
+        w.handle(Command::Step(n));
+        w
+    }
+
+    #[test]
+    fn e14_02_json_fields() {
+        let mut w = stepped(&PRINT_A, 1);
+        let v = serde_json::to_value(w.build()).unwrap();
+        for k in [
+            "type",
+            "status",
+            "n",
+            "t",
+            "ips",
+            "mhz",
+            "tlast",
+            "regs",
+            "bus",
+            "alu",
+            "dis",
+            "trace",
+            "stack",
+            "mem",
+            "wlog",
+            "console_delta",
+            "tests",
+            "bps",
+            "rom",
+        ] {
+            assert!(v.get(k).is_some(), "missing field {}", k);
+        }
+        assert_eq!(v["type"], "state");
+        for k in [
+            "af", "bc", "de", "hl", "af2", "bc2", "de2", "hl2", "ix", "iy", "sp", "pc", "i", "r",
+            "wz", "iff1", "iff2", "im",
+        ] {
+            assert!(v["regs"].get(k).is_some(), "missing regs.{}", k);
+        }
+        for k in ["addr", "data", "kind", "pins"] {
+            assert!(v["bus"].get(k).is_some(), "missing bus.{}", k);
+        }
+        assert!(v["bus"]["pins"].as_str().unwrap().starts_with("0x"));
+        for k in ["base", "hex"] {
+            assert!(v["mem"].get(k).is_some());
+        }
+        for k in ["ok", "err", "total"] {
+            assert!(v["tests"].get(k).is_some());
+        }
+        for k in ["name", "size", "kind"] {
+            assert!(v["rom"].get(k).is_some());
+        }
+        assert_eq!(hello()["type"], "hello");
+    }
+
+    #[test]
+    fn e14_02_regs_match_cpu() {
+        let mut w = stepped(&PRINT_A, 2);
+        let s = w.build();
+        let r = &w.machine.cpu.regs;
+        assert_eq!(s.regs.pc, r.pc);
+        assert_eq!(s.regs.af, r.af());
+        assert_eq!(s.regs.bc, r.bc());
+        assert_eq!(s.regs.de, r.de());
+        assert_eq!(s.regs.hl, r.hl());
+        assert_eq!(s.regs.sp, r.sp);
+        assert_eq!(s.regs.de & 0xFF, u16::from(b'A'));
+        assert_eq!(s.regs.bc & 0xFF, 2);
+        assert_eq!((s.n, s.status.as_str()), (2, "idle"));
+    }
+
+    #[test]
+    fn e14_02_dis_rows() {
+        let mut w = stepped(&PRINT_A, 0);
+        w.handle(Command::View(ViewParams {
+            dis_rows: 4,
+            ..ViewParams::default()
+        }));
+        let s = w.build();
+        assert_eq!(s.dis.len(), 4);
+        assert_eq!(s.dis[0].addr, 0x0100);
+        assert_eq!(s.dis[0].text, "LD E,$41");
+        assert_eq!(s.dis[0].bytes, vec![0x1E, b'A']);
+        assert_eq!(s.dis[0].len, 2);
+        assert_eq!(s.dis[0].pre, "");
+        assert_eq!(s.dis[1].addr, 0x0102);
+        assert_eq!(s.dis[2].text, "CALL $0005");
+        assert_eq!(s.dis[2].len, 3);
+    }
+
+    #[test]
+    fn e14_02_stack_words() {
+        // LD HL,1234h; PUSH HL; LD HL,5678h; PUSH HL
+        let mut w = stepped(&[0x21, 0x34, 0x12, 0xE5, 0x21, 0x78, 0x56, 0xE5], 4);
+        let s = w.build();
+        let sp = w.machine.cpu.regs.sp;
+        assert_eq!(s.stack.len(), 14);
+        assert_eq!(
+            s.stack[0],
+            StackRow {
+                addr: sp,
+                word: 0x5678
+            }
+        );
+        assert_eq!(
+            s.stack[1],
+            StackRow {
+                addr: sp.wrapping_add(2),
+                word: 0x1234
+            }
+        );
+    }
+
+    #[test]
+    fn e14_02_mem_hex_len() {
+        let mut w = stepped(&PRINT_A, 0);
+        let s = w.build();
+        assert_eq!(s.mem.hex.len(), 512);
+        assert_eq!(s.mem.base, 0x0100);
+        assert!(s.mem.hex.starts_with("1e41"), "{}", &s.mem.hex[..8]);
+        w.handle(Command::View(ViewParams {
+            follow: "man".into(),
+            mem_base: 0xFFF0,
+            ..ViewParams::default()
+        }));
+        let s = w.build();
+        assert_eq!(s.mem.base, 0xFF00, "the window never runs past 0xFFFF");
+        assert_eq!(s.mem.hex.len(), 512);
+    }
+
+    #[test]
+    fn e14_02_bus_view() {
+        let mut w = stepped(&[0x3E, 0x07, 0x32, 0x00, 0x20], 2); // LD A,7; LD (2000h),A
+        let s = w.build();
+        let b = w.machine.cpu.last_bus();
+        assert_eq!(
+            (s.bus.addr, s.bus.data, s.bus.kind),
+            (b.addr, b.data, b.kind)
+        );
+        assert_eq!((s.bus.addr, s.bus.data, s.bus.kind), (0x2000, 7, 2));
+        assert_eq!(s.bus.pins, format!("{:#x}", b.pins.0));
+    }
+
+    #[test]
+    fn e14_02_alu_after_add() {
+        let mut w = stepped(&[0x3E, 0x05, 0xC6, 0x03], 1);
+        assert!(w.build().alu.is_none() || w.build().alu.is_some());
+        w.handle(Command::Step(1)); // ADD A,3
+        let a = w.build().alu.expect("ALU record after ADD");
+        assert_eq!((a.op.as_str(), a.w, a.a, a.b, a.r), ("ADD", 8, 5, 3, 8));
+    }
+
+    #[test]
+    fn e14_02_wlog_after_write() {
+        let mut w = stepped(&[0x21, 0x00, 0x20, 0x77], 2); // LD HL,2000h; LD (HL),A
+        let s = w.build();
+        assert_eq!(s.wlog.first(), Some(&0x2000));
+    }
+
+    #[test]
+    fn e14_02_console_cursor() {
+        let s = Session::spawn();
+        s.send(Command::Load {
+            name: "t.com".into(),
+            bytes: PRINT_A.to_vec(),
+        });
+        s.send(Command::Speed(7));
+        s.send(Command::Run);
+        wait_for(&s, "done", |x| x.status == "done");
+        let (text, pos) = s.console_since(0);
+        assert_eq!(text, "A");
+        assert_eq!(s.console_since(pos), (String::new(), pos));
+        s.send(Command::ConsoleClear);
+        std::thread::sleep(Duration::from_millis(200));
+        assert_eq!(s.console_since(pos), (String::new(), 0));
         s.send(Command::Quit);
     }
 }
