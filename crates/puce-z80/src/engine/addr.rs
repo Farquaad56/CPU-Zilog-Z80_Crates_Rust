@@ -55,8 +55,8 @@ pub(crate) fn resolve(cpu: &mut Cpu, a: Addr, port: bool) -> u16 {
                 Prefix::Fd => cpu.regs.iy,
                 Prefix::None => 0, // Should not happen in valid plans
             };
-            let disp: i16 = cpu.eng.disp as i8 as i16;
-            let addr = (base as i16 + disp) as u16;
+            // Signed displacement added with 16-bit wraparound (no overflow panic in debug builds).
+            let addr = base.wrapping_add(cpu.eng.disp as i8 as i16 as u16);
             cpu.eng.xy_addr = addr;
             cpu.regs.wz = addr;
             addr

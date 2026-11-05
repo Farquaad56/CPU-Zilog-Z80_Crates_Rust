@@ -1,7 +1,7 @@
 //! `z80 ssc <dir> [--filter 00,dd/21] [--max-fail N]`: run SingleStepTests/z80 files and
 //! compare the final CPU / memory state (bus cycles are compared by later tasks).
 
-use puce_z80_machines::ssc::{check_case, load_file};
+use puce_z80_machines::ssc::{check_case, check_case_cycles, load_file};
 use serde::Deserialize;
 use std::collections::{BTreeSet, HashMap};
 use std::io::Write;
@@ -13,6 +13,8 @@ pub struct SscArgs {
     pub dir: PathBuf,
     pub filter: Option<String>,
     pub max_fail: Option<u32>,
+    /// Also compare the bus cycles T-state by T-state
+    pub cycles: bool,
 }
 
 /// `tests/baseline.json`: opcodes whose failures are known and explained.
@@ -114,6 +116,7 @@ pub fn run_dir(
     dir: &Path,
     filter: Option<&str>,
     max_fail: u32,
+    cycles: bool,
     baseline: &Baseline,
     out: &mut dyn Write,
 ) -> Result<Totals, String> {
@@ -134,7 +137,11 @@ pub fn run_dir(
         let cases = load_file(&path)?;
         let mut passed = 0usize;
         for case in &cases {
-            let diffs = check_case(case);
+            let diffs = if cycles {
+                check_case_cycles(case)
+            } else {
+                check_case(case)
+            };
             totals.cases += 1;
             if diffs.is_empty() {
                 passed += 1;
@@ -180,6 +187,7 @@ pub fn run(args: SscArgs) -> Result<(), String> {
         &args.dir,
         args.filter.as_deref(),
         args.max_fail.unwrap_or(20),
+        args.cycles,
         &baseline,
         &mut stdout,
     )?;
@@ -222,6 +230,31 @@ mod tests {
     }
 
     #[test]
+    fn e13_10_cycles_match_sample() {
+        let dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/roms/singlestep");
+        if !dir.exists() {
+            eprintln!("SKIP: run python docs/tools/fetch_roms.py --optional singlestep");
+            return;
+        }
+        let sample =
+            "00,01,3e,3a,c5,cd,db,d3,dd/cb/06,76,ed/a0,c9,10,dd/21,fd/34,cb/46,e3,ed/45,ed/b0,f9";
+        let mut out: Vec<u8> = Vec::new();
+        let t = run_dir(
+            &dir,
+            Some(sample),
+            20,
+            true,
+            &load_baseline().unwrap(),
+            &mut out,
+        )
+        .unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert_eq!(t.new_failures, 0, "{}", text);
+        assert!(t.cases >= 20000, "{}", text);
+    }
+
+    #[test]
     fn e13_08_filter() {
         let f = parse_filter("00,dd/21,dd/cb/06");
         let want: BTreeSet<String> = ["00", "dd 21", "dd cb __ 06"]
@@ -234,7 +267,7 @@ mod tests {
         std::fs::write(dir.join("00.json"), NOP_CASE).unwrap();
         std::fs::write(dir.join("01.json"), "not json").unwrap();
         let mut out: Vec<u8> = Vec::new();
-        let t = run_dir(&dir, Some("00"), 5, &Baseline::default(), &mut out).unwrap();
+        let t = run_dir(&dir, Some("00"), 5, false, &Baseline::default(), &mut out).unwrap();
         std::fs::remove_dir_all(&dir).ok();
         let text = String::from_utf8(out).unwrap();
         assert_eq!(t.cases, 1);

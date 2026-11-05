@@ -181,10 +181,13 @@ impl Cpu {
                     let r = self.regs.r;
                     self.regs.r = (r & 0x80) | (r.wrapping_add(1) & 0x7F);
                 }
+                // The refresh address carries R as it was before this M1 incremented it
+                // (SingleStepTests, docs/specs/33_SINGLESTEP_FORMAT.md).
+                let r_refresh = (self.regs.r & 0x80) | (self.regs.r.wrapping_sub(1) & 0x7F);
                 out = fetch_pins(
                     self.eng.cur_addr,
                     self.regs.i,
-                    self.regs.r,
+                    r_refresh,
                     self.eng.t,
                     cur.len,
                     self.eng.halt_cycle,
@@ -316,6 +319,12 @@ impl Cpu {
 
         // Step 5: If token complete, advance to next
         if self.eng.t == cur.len {
+            // After an M1 the address bus keeps the refresh address (I:R) during the internal
+            // T-states that follow (SingleStepTests, docs/specs/33_SINGLESTEP_FORMAT.md).
+            if cur.kind == Kind::F {
+                let r_before = (self.regs.r & 0x80) | (self.regs.r.wrapping_sub(1) & 0x7F);
+                self.eng.cur_addr = (u16::from(self.regs.i) << 8) | u16::from(r_before);
+            }
             if self.eng.ddcb && cur.kind == Kind::R && cur.reg == Reg::Op {
                 // End of `DD CB d op`: the operation byte selects the real plan.
                 self.eng.table = Table::DdCb;
@@ -1216,7 +1225,8 @@ mod tests {
         let _t1 = cpu.tick(Pins(0));
         let _t2 = cpu.tick(Pins(0));
         let t3 = cpu.tick(Pins(0));
-        assert_eq!(t3.addr(), 0x1235);
+        // The refresh address carries R before this M1 increments it (E13-10).
+        assert_eq!(t3.addr(), 0x1234);
         assert!(t3.has(Pins::RFSH));
         assert!(t3.has(Pins::MREQ));
     }

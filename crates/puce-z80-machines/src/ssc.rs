@@ -3,7 +3,7 @@
 //! Reads the JSON test files and builds a [`Cpu`] plus a sparse memory from the `initial` state.
 //! The comparison with the `final` state and the cycles lives elsewhere (E13-08 and later).
 
-use puce_z80::{Bus, Cpu};
+use puce_z80::{Bus, Cpu, Pins};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -270,6 +270,113 @@ pub fn diff_final(case: &Case, cpu: &Cpu, bus: &SparseBus) -> Vec<String> {
     out
 }
 
+/// Maximum ticks of one instruction (the longest takes 23).
+const MAX_TICKS: usize = 64;
+
+/// Run one instruction tick by tick, serving memory and ports like `Cpu::step` does.
+///
+/// Returns the CPU, the memory and one entry per tick: the output pins, with the byte that the
+/// host supplied for a read placed in the data field of the tick that follows the read request.
+pub fn run_ticks(case: &Case) -> (Cpu, SparseBus, Vec<Pins>) {
+    let (mut cpu, mut bus) = apply_initial(case);
+    let mut rows: Vec<Pins> = Vec::new();
+    let mut last = Pins(0);
+    for _ in 0..MAX_TICKS {
+        let mut pins_in = Pins(0);
+        let mut fed = None;
+        if last.has(Pins::MREQ) && last.has(Pins::RD) {
+            fed = Some(bus.read(last.addr()));
+        } else if last.has(Pins::IORQ) && last.has(Pins::RD) && !last.has(Pins::M1) {
+            fed = Some(bus.io_read(last.addr()));
+        }
+        if let Some(v) = fed {
+            pins_in = pins_in.set_data(v);
+        }
+        let out = cpu.tick(pins_in);
+        if out.has(Pins::MREQ) && out.has(Pins::WR) {
+            bus.write(out.addr(), out.data());
+        }
+        if out.has(Pins::IORQ) && out.has(Pins::WR) {
+            bus.io_write(out.addr(), out.data());
+        }
+        rows.push(match fed {
+            Some(v) => out.set_data(v),
+            None => out,
+        });
+        last = out;
+        if cpu.at_instruction_boundary() {
+            break;
+        }
+    }
+    (cpu, bus, rows)
+}
+
+/// The `rwmi` pin string of the SingleStepTests format for one tick of our outputs.
+///
+/// `r` = RD, `w` = WR, `m` = MREQ together with RD or WR (the refresh MREQ is not reported),
+/// `i` = IORQ together with RD or WR.
+pub fn pin_string(p: Pins) -> String {
+    let rw = p.has(Pins::RD) || p.has(Pins::WR);
+    let ch = |on: bool, c: char| if on { c } else { '-' };
+    [
+        ch(p.has(Pins::RD), 'r'),
+        ch(p.has(Pins::WR), 'w'),
+        ch(p.has(Pins::MREQ) && rw, 'm'),
+        ch(p.has(Pins::IORQ) && rw, 'i'),
+    ]
+    .iter()
+    .collect()
+}
+
+/// Compare the bus cycles of the case with the ticks of the CPU, one line per difference.
+///
+/// Tick `i` is compared with `cycles[i]`: address, pin string, and the data when the test
+/// gives one (reads: the byte supplied by the host; writes: the byte written).
+pub fn diff_cycles(case: &Case, rows: &[Pins]) -> Vec<String> {
+    let mut out = Vec::new();
+    if rows.len() != case.cycles.len() {
+        out.push(format!(
+            "cycles: expected {} T-states, got {}",
+            case.cycles.len(),
+            rows.len()
+        ));
+    }
+    for (i, (want, got)) in case.cycles.iter().zip(rows).enumerate() {
+        let t = i + 1;
+        if want.0 != got.addr() {
+            out.push(format!(
+                "T{}: address expected {:#06x}, got {:#06x}",
+                t,
+                want.0,
+                got.addr()
+            ));
+        }
+        let pins = pin_string(*got);
+        if want.2 != pins {
+            out.push(format!("T{}: pins expected {}, got {}", t, want.2, pins));
+        }
+        if let Some(d) = want.1 {
+            if d != got.data() {
+                out.push(format!(
+                    "T{}: data expected {:#04x}, got {:#04x}",
+                    t,
+                    d,
+                    got.data()
+                ));
+            }
+        }
+    }
+    out
+}
+
+/// Like [`check_case`] but ticks the CPU and also compares the bus cycles.
+pub fn check_case_cycles(case: &Case) -> Vec<String> {
+    let (cpu, bus, rows) = run_ticks(case);
+    let mut out = diff_final(case, &cpu, &bus);
+    out.extend(diff_cycles(case, &rows));
+    out
+}
+
 /// Run one case on its own CPU and memory, and return the differences with `final`.
 pub fn check_case(case: &Case) -> Vec<String> {
     let (mut cpu, mut bus) = apply_initial(case);
@@ -363,6 +470,28 @@ mod tests {
         let cases = load_file(&path).unwrap();
         assert_eq!(cases.len(), 1000);
         assert_eq!(cases[0].cycles.len(), 4);
+    }
+
+    #[test]
+    fn e13_10_cycle_diff_message() {
+        let cases = parse_cases(SAMPLE).unwrap();
+        let (_, _, mut rows) = run_ticks(&cases[0]);
+        assert_eq!(diff_cycles(&cases[0], &rows), Vec::<String>::new());
+        rows[1] = rows[1].set_addr(0x1234);
+        let d = diff_cycles(&cases[0], &rows);
+        assert!(
+            d.iter()
+                .any(|l| l.starts_with("T2: address expected 0x4ddf, got 0x1234")),
+            "{:?}",
+            d
+        );
+        rows.pop();
+        let d = diff_cycles(&cases[0], &rows);
+        assert!(
+            d[0].starts_with("cycles: expected 4 T-states, got 3"),
+            "{:?}",
+            d
+        );
     }
 
     #[test]
