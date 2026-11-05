@@ -141,9 +141,7 @@ fn run_vector(table: &str, opcode: u8, vec: u8) -> Result<(Cpu, TestBus), String
             let pre = if !vec.is_multiple_of(2) { 0xFD } else { 0xDD };
             bus.mem[pc as usize] = pre;
             bus.mem[(pc + 1) as usize] = 0xCB;
-            // Third byte is random displacement from PRNG
-            let disp = rng.n8();
-            bus.mem[(pc + 2) as usize] = disp;
+            // Third byte is mem(PC+2), the hashed memory byte (spec 24_DIFF_VECTORS.md): not overwritten.
             bus.mem[(pc + 3) as usize] = opcode;
         }
         _ => {}
