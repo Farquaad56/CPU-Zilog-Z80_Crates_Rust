@@ -86,11 +86,12 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
         // OUT (n),A (0xD3): X0: TMP.L = A; WZ = ((n+1)&0xFF) | (A<<8).
         // The plan reads port number n into Z before this hook, then outputs via O4.
         0xD3 => {
-            // UNKNOWN - to confirm: the port address low byte is read from Z at O4,
-            // after this hook, so Z must stay n here. Final Z = n+1 needs a post-bus
-            // hook (see docs/qa/inbox/E05-05-Q1.md). W = A is already final.
+            // The port address low byte is read from Z at O4, after this hook, so Z stays n
+            // during the bus cycle; the final WZ is applied when the instruction completes.
             cpu.eng.tmp_l = cpu.regs.a;
-            cpu.regs.wz = (cpu.regs.wz & 0x00FF) | ((cpu.regs.a as u16) << 8);
+            let n = cpu.regs.wz & 0x00FF;
+            cpu.regs.wz = n | ((cpu.regs.a as u16) << 8);
+            cpu.eng.wz_post = Some((n.wrapping_add(1) & 0x00FF) | ((cpu.regs.a as u16) << 8));
         }
 
         _ => {}
@@ -152,17 +153,19 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
                 cpu.regs.wz = de_plus1;
             }
             // LD (nn),A: store A at absolute address nn
-            // UNKNOWN - to confirm: the plan is X0 W3:NN<L with no hook after the write,
-            // and NN is read from WZ at the write, so WZ must stay nn here. The final
-            // WZ (((nn+1)&0xFF)|(A<<8)) needs a post-write hook. See docs/qa/inbox/E05-05-Q1.md.
+            // NN is read from WZ at the write, so WZ stays nn during the bus cycle; the final
+            // WZ (((nn+1)&0xFF)|(A<<8)) is applied when the instruction completes.
             6 => {
                 cpu.eng.tmp_l = cpu.regs.a;
+                let nn = cpu.regs.wz;
+                cpu.eng.wz_post = Some((nn.wrapping_add(1) & 0x00FF) | ((cpu.regs.a as u16) << 8));
             }
             // LD (nn),HL: store HL at absolute address nn
             4 => {
                 let v = hl(cpu);
                 cpu.eng.tmp_l = v as u8;
                 cpu.eng.tmp_h = (v >> 8) as u8;
+                cpu.eng.wz_post = Some(cpu.regs.wz.wrapping_add(1));
             }
             // LD HL,(nn): load from absolute address nn into HL
             5 => {

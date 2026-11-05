@@ -92,7 +92,8 @@ fn ed_ld_nn_rp(cpu: &mut Cpu, y: u8) {
         let v = rp(cpu, p);
         cpu.eng.tmp_l = v as u8;
         cpu.eng.tmp_h = (v >> 8) as u8;
-        // WZ stays at nn for the write; updated after by plan
+        // WZ stays at nn for the write; nn + 1 is applied when the instruction completes.
+        cpu.eng.wz_post = Some(cpu.regs.wz.wrapping_add(1));
     } else {
         // LD rp,(nn): load register pair from address nn
         let v = ((cpu.eng.tmp_h as u16) << 8) | (cpu.eng.tmp_l as u16);
@@ -110,10 +111,11 @@ fn ed_in_c(cpu: &mut Cpu, y: u8) {
         | if v == 0 { flag::Z } else { 0 }
         | alu::parity(v);
     set_f(cpu, flags);
+    // WZ from BC before the destination register is written (it may be B or C).
+    cpu.regs.wz = cpu.regs.bc().wrapping_add(1);
     if y != 6 {
         set_r8(cpu, y, v);
     }
-    cpu.regs.wz = cpu.regs.bc().wrapping_add(1);
 }
 
 /// OUT (C),r (y != 6) and OUT (C),0 (y == 6, NMOS).
