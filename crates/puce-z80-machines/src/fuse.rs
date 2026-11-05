@@ -11,7 +11,7 @@
 //! are not part of the pass / fail criterion (decision recorded in 34_FUSE_FORMAT.md).
 
 use puce_z80::{Bus, Cpu, Pins};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Kind of a bus event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -404,12 +404,15 @@ pub fn run_fuse(test: &FuseTest) -> FuseResult {
     let mut bus = FuseBus {
         ram: Box::new([0u8; 65536]),
     };
+    let mut listed: BTreeSet<u16> = BTreeSet::new();
     for (addr, bytes) in &test.mem_blocks {
         for (i, b) in bytes.iter().enumerate() {
             bus.ram[addr.wrapping_add(i as u16) as usize] = *b;
+            listed.insert(addr.wrapping_add(i as u16));
         }
     }
     let initial = bus.ram.clone();
+    let mut written: BTreeSet<u16> = BTreeSet::new();
 
     let mut events: Vec<Event> = Vec::new();
     let mut time: u32 = 0;
@@ -454,6 +457,7 @@ pub fn run_fuse(test: &FuseTest) -> FuseResult {
             } else if out.has(Pins::MREQ) && out.has(Pins::WR) {
                 let a = out.addr();
                 bus.write(a, out.data());
+                written.insert(a);
                 events.push(Event {
                     time: t - 1,
                     kind: Kind::Mc,
@@ -493,12 +497,13 @@ pub fn run_fuse(test: &FuseTest) -> FuseResult {
         }
     }
 
-    let mut changes = BTreeMap::new();
-    for a in 0..65536usize {
-        if bus.ram[a] != initial[a] {
-            changes.insert(a as u16, bus.ram[a]);
-        }
-    }
+    // An address counts as modified when its value differs from the initial setup; an address
+    // the test did not initialise counts as modified as soon as it is written (even with 0).
+    let changes: BTreeMap<u16, u8> = written
+        .iter()
+        .filter(|&&a| !listed.contains(&a) || bus.ram[a as usize] != initial[a as usize])
+        .map(|&a| (a, bus.ram[a as usize]))
+        .collect();
     FuseResult {
         events,
         regs: regs_of(&cpu, time),
@@ -514,6 +519,24 @@ pub fn compare(result: &FuseResult, expected: &FuseExpected) -> Vec<String> {
         .events
         .iter()
         .filter(|e| e.kind.is_data())
+        .collect();
+    // FUSE quirk: the operand read of a not-taken JR cc / DJNZ is stamped MC but never MR.
+    // Drop our MR when the reference has the MC at the cycle start and no data event at all.
+    let got: Vec<&Event> = got
+        .into_iter()
+        .filter(|g| {
+            let quirk = g.kind == Kind::Mr
+                && g.time >= 3
+                && expected
+                    .events
+                    .iter()
+                    .any(|e| e.kind == Kind::Mc && e.addr == g.addr && e.time == g.time - 3)
+                && !expected
+                    .events
+                    .iter()
+                    .any(|e| e.kind.is_data() && e.addr == g.addr && e.time == g.time);
+            !quirk
+        })
         .collect();
     for i in 0..got.len().max(exp.len()) {
         match (got.get(i), exp.get(i)) {
@@ -593,9 +616,33 @@ pub fn compare(result: &FuseResult, expected: &FuseExpected) -> Vec<String> {
     out
 }
 
-/// Run every test of `tests.in` and compare with `tests.expected` (matched by position and name).
+/// FUSE tests that are known to disagree with the hardware-accurate behaviour of this crate
+/// (and with SingleStepTests); each entry is documented in DECISIONS.md and
+/// `docs/qa/inbox/E13-14-Q1.md` and is excluded from [`check_all`].
+pub const KNOWN: &[(&str, &str)] = &[
+    ("37_1", "SCF X/Y: FUSE uses A|F, we use A (D-024/D-025)"),
+    ("3f", "CCF X/Y: FUSE uses A|F, we use A (D-024/D-025)"),
+    (
+        "edb2_1",
+        "INIR repeat: FUSE keeps MEMPTR=BC+1, hardware/SST give PC+1",
+    ),
+    (
+        "edb3_1",
+        "OTIR repeat: FUSE keeps MEMPTR, hardware/SST give PC+1",
+    ),
+    (
+        "edba_1",
+        "INDR repeat: FUSE keeps MEMPTR, hardware/SST give PC+1",
+    ),
+    (
+        "edbb_1",
+        "OTDR repeat: FUSE keeps MEMPTR, hardware/SST give PC+1",
+    ),
+];
+
+/// Run every test of `tests.in` and compare with `tests.expected` (matched by name).
 ///
-/// Returns `(name, differences)` for each test that fails.
+/// Returns `(name, differences)` for each test that fails and is not in [`KNOWN`].
 pub fn check_all(tests: &[FuseTest], expected: &[FuseExpected]) -> Vec<(String, Vec<String>)> {
     let mut fails = Vec::new();
     for t in tests {
@@ -603,7 +650,8 @@ pub fn check_all(tests: &[FuseTest], expected: &[FuseExpected]) -> Vec<(String, 
             None => fails.push((t.name.clone(), vec!["no expected record".to_string()])),
             Some(e) => {
                 let d = compare(&run_fuse(t), e);
-                if !d.is_empty() {
+                let known = KNOWN.iter().any(|(n, _)| *n == t.name);
+                if !d.is_empty() && !known {
                     fails.push((t.name.clone(), d));
                 }
             }
