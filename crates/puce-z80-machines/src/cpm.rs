@@ -47,6 +47,8 @@ pub struct CpmMachine {
     pub instr: u64,
     /// T-states elapsed.
     pub tstates: u64,
+    /// Raw mode: no warm boot or BDOS hooks, the program owns all of memory.
+    pub raw: bool,
     /// Start of the line being printed, inside `out`.
     line_start: usize,
 }
@@ -79,6 +81,7 @@ impl CpmMachine {
             tests_err: 0,
             instr: 0,
             tstates: 0,
+            raw: false,
             line_start: 0,
         }
     }
@@ -92,14 +95,25 @@ impl CpmMachine {
         self.exited = false;
     }
 
+    /// Load a raw image at 0000h, with PC = 0000h and no CP/M hooks.
+    pub fn load_raw(&mut self, bytes: &[u8]) {
+        self.ram.fill(0);
+        let n = bytes.len().min(0x10000);
+        self.ram[..n].copy_from_slice(&bytes[..n]);
+        self.cpu.regs.pc = 0x0000;
+        self.cpu.regs.sp = 0xFFFE;
+        self.raw = true;
+        self.exited = false;
+    }
+
     /// Execute one instruction (or one BDOS call) and return the T-states used.
     pub fn step(&mut self) -> u32 {
         let pc = self.cpu.regs.pc;
-        if pc == Self::WARM_BOOT {
+        if !self.raw && pc == Self::WARM_BOOT {
             self.exited = true;
             return 0;
         }
-        let ts = if pc == Self::BDOS {
+        let ts = if !self.raw && pc == Self::BDOS {
             self.bdos();
             Self::BDOS_TSTATES
         } else {

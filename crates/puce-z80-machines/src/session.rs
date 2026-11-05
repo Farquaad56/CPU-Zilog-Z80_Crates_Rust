@@ -417,8 +417,12 @@ impl Worker {
 
     fn reload(&mut self) {
         self.machine = CpmMachine::new();
-        if let Some((_, bytes)) = &self.rom {
-            self.machine.load_com(bytes);
+        if let Some((name, bytes)) = &self.rom {
+            if name.to_ascii_lowercase().ends_with(".bin") {
+                self.machine.load_raw(bytes);
+            } else {
+                self.machine.load_com(bytes);
+            }
         }
         self.running = false;
         self.credit = 0.0;
@@ -979,6 +983,23 @@ mod tests {
         let mut w = stepped(&[0x21, 0x00, 0x20, 0x77], 2); // LD HL,2000h; LD (HL),A
         let s = w.build();
         assert_eq!(s.wlog.first(), Some(&0x2000));
+    }
+
+    #[test]
+    fn e14_05_raw_bin_runs_at_zero() {
+        // .bin images are loaded raw at 0000h: LD A,7; HALT (PC 0 is not a warm boot).
+        let mut w = Worker::new();
+        w.handle(Command::Load {
+            name: "prog.bin".into(),
+            bytes: vec![0x3E, 0x07, 0x76],
+        });
+        w.handle(Command::Run);
+        w.advance(Duration::from_millis(10));
+        let s = w.build();
+        assert_eq!(s.status, "halted");
+        assert_eq!(s.regs.af >> 8, 7);
+        assert_eq!(s.rom.kind, "raw");
+        assert!(s.mem.hex.starts_with("3e0776"), "{}", &s.mem.hex[..8]);
     }
 
     #[test]
