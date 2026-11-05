@@ -4,6 +4,8 @@
 //! "ignored" (the prefix is a 4 T no-op and the Main semantics apply unchanged).
 
 use super::main::sem_main;
+use super::regs::{r8x, set_f, set_r8x};
+use crate::alu;
 use crate::cpu::Cpu;
 
 /// True when the DD/FD prefix changes the instruction (HL/H/L/(HL) become IX/IY forms).
@@ -49,12 +51,57 @@ pub(crate) fn is_indexed(op: u8) -> bool {
 /// Ignored opcodes run the Main semantics (the prefix only costs 4 T, taken by the plan).
 /// Indexed opcodes do nothing yet (E08-02..E08-06).
 pub(crate) fn sem_idx(cpu: &mut Cpu, op: u8, hook_no: u8) {
-    if is_indexed(op) && !is_idx_pair_op(op) && !is_idx_mem_ld(op) && !is_idx_mem_alu(op) {
+    if !is_indexed(op) || is_idx_pair_op(op) || is_idx_mem_ld(op) || is_idx_mem_alu(op) {
+        // Ignored opcodes, 16-bit IX/IY forms (E08-02/03) and (IX+d) memory forms
+        // (E08-04/05) share the Main semantics: hl()/set_hl() map HL to IX/IY from
+        // eng.prefix, and index 6 is the byte travelling through TMP.L.
+        sem_main(cpu, op, hook_no);
         return;
     }
-    // Ignored opcodes and the 16-bit IX/IY forms (E08-02) share the Main semantics:
-    // the helpers hl()/set_hl()/rp()/rp2() map HL to IX/IY from eng.prefix.
-    sem_main(cpu, op, hook_no);
+    // Remaining indexed opcodes use H/L as IXH/IXL (IYH/IYL) registers (E08-06).
+    if hook_no == 0 {
+        idx_reg_op(cpu, op);
+    }
+}
+
+/// Undocumented IXH/IXL forms: LD r,r' / LD r,n / INC r / DEC r / ALU A,r with H/L replaced
+/// by IXH/IXL (IYH/IYL). Only opcodes without a (IX+d) operand reach this function.
+fn idx_reg_op(cpu: &mut Cpu, op: u8) {
+    let x = op >> 6;
+    let y = (op >> 3) & 7;
+    let z = op & 7;
+    match x {
+        1 => {
+            // LD r(y),r(z)
+            let v = r8x(cpu, z);
+            set_r8x(cpu, y, v);
+        }
+        0 if z == 6 => {
+            // LD r(y),n: n is already in TMP.L
+            let v = cpu.eng.tmp_l;
+            set_r8x(cpu, y, v);
+        }
+        0 => {
+            // INC r (z == 4) / DEC r (z == 5)
+            let v = r8x(cpu, y);
+            let (res, f) = if z == 4 {
+                alu::inc8(v, cpu.regs.f)
+            } else {
+                alu::dec8(v, cpu.regs.f)
+            };
+            set_r8x(cpu, y, res);
+            set_f(cpu, f);
+        }
+        _ => {
+            // ALU A,r(z)
+            let b = r8x(cpu, z);
+            let (res, f) = alu::alu8(y, cpu.regs.a, b, cpu.regs.f);
+            if y != 7 {
+                cpu.regs.a = res;
+            }
+            set_f(cpu, f);
+        }
+    }
 }
 
 /// Indexed memory loads implemented by E08-04: LD r,(IX+d) / LD (IX+d),r / LD (IX+d),n.
@@ -381,5 +428,64 @@ mod tests {
         sem_idx(&mut cpu, 0x35, 0);
         assert_eq!(cpu.eng.tmp_l, 0x00);
         assert_ne!(cpu.regs.f & crate::regs::flag::N, 0);
+    }
+
+    #[test]
+    fn e08_06_ld_b_ixh() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0xA155;
+        sem_idx(&mut cpu, 0x44, 0);
+        assert_eq!(cpu.regs.b, 0xA1);
+    }
+
+    #[test]
+    fn e08_06_ld_ixh_ixl() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0x1234;
+        sem_idx(&mut cpu, 0x65, 0);
+        assert_eq!(cpu.regs.ix, 0x3434);
+    }
+
+    #[test]
+    fn e08_06_ld_ixl_n() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0x1200;
+        cpu.eng.tmp_l = 0x99;
+        sem_idx(&mut cpu, 0x2E, 0);
+        assert_eq!(cpu.regs.ix, 0x1299);
+    }
+
+    #[test]
+    fn e08_06_inc_ixh() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0x7F00;
+        sem_idx(&mut cpu, 0x24, 0);
+        assert_eq!(cpu.regs.ix, 0x8000);
+    }
+
+    #[test]
+    fn e08_06_dec_ixl() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0x1200;
+        sem_idx(&mut cpu, 0x2D, 0);
+        assert_eq!(cpu.regs.ix, 0x12FF);
+    }
+
+    #[test]
+    fn e08_06_add_a_ixh() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.a = 0x01;
+        cpu.regs.ix = 0x0F00;
+        sem_idx(&mut cpu, 0x84, 0);
+        assert_eq!(cpu.regs.a, 0x10);
+    }
+
+    #[test]
+    fn e08_06_ld_a_iyl_fd() {
+        let mut cpu = with_prefix(Prefix::Fd);
+        cpu.regs.iy = 0x1234;
+        cpu.regs.ix = 0xFFFF;
+        sem_idx(&mut cpu, 0x7D, 0);
+        assert_eq!(cpu.regs.a, 0x34);
     }
 }
