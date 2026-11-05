@@ -23,7 +23,13 @@ enum Commands {
         max_instr: Option<u64>,
     },
     /// Run a test suite by name
-    Suite { name: String },
+    Suite {
+        /// prelim, zexdoc or zexall
+        name: String,
+        /// Stop after this many instructions
+        #[arg(long)]
+        max_instr: Option<u64>,
+    },
     /// Run SingleStepTests from a directory
     Ssc {
         dir: PathBuf,
@@ -47,8 +53,8 @@ fn main() {
         Commands::Cpm { rom, max_instr } => {
             commands::cpm_cmd::run(commands::cpm_cmd::CpmArgs { rom, max_instr })
         }
-        Commands::Suite { name } => {
-            commands::suite_cmd::run(commands::suite_cmd::SuiteArgs { name })
+        Commands::Suite { name, max_instr } => {
+            commands::suite_cmd::run(commands::suite_cmd::SuiteArgs { name, max_instr })
         }
         Commands::Ssc { dir, filter } => {
             commands::ssc_cmd::run(commands::ssc_cmd::SscArgs { dir, filter })
