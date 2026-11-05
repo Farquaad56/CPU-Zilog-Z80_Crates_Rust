@@ -2,7 +2,7 @@
 //!
 //! E11-01: text buffer, number formatters, and the operand-less, prefix-less case.
 
-use crate::tables::mnem::{MNEM_CB, MNEM_ED, MNEM_MAIN};
+use crate::tables::mnem::{MNEM_CB, MNEM_DDCB, MNEM_DDFD, MNEM_ED, MNEM_MAIN};
 use core::fmt;
 
 /// Capacity of a disassembled text, in bytes.
@@ -36,6 +36,15 @@ impl DisText {
     pub fn put_str(&mut self, s: &str) {
         for b in s.bytes() {
             self.put_byte(b);
+        }
+    }
+
+    /// Replace every `IX` by `IY` (the DDFD templates are written for IX).
+    fn swap_ix_iy(&mut self) {
+        for i in 1..self.len as usize {
+            if self.buf[i - 1] == b'I' && self.buf[i] == b'X' {
+                self.buf[i] = b'Y';
+            }
         }
     }
 
@@ -233,12 +242,61 @@ fn expand(t: &mut DisText, tmpl: &str, ops: &Operands) {
     });
 }
 
+/// A DD or FD instruction. DD/FD followed by an opcode that does not use HL is reported as the
+/// lone prefix (`DD` / `FD`, length 1): the prefix is a 4 T instruction of its own.
+fn disassemble_index(addr: u16, prefix: u8, read: &mut dyn FnMut(u16) -> u8) -> Insn {
+    let op = read(addr.wrapping_add(1));
+    let mut text = DisText::new();
+    if op == 0xCB {
+        // DD CB d op: the displacement comes before the operation byte.
+        let d = read(addr.wrapping_add(2));
+        let op4 = read(addr.wrapping_add(3));
+        let ops = Operands {
+            d,
+            ..Operands::default()
+        };
+        expand(&mut text, MNEM_DDCB[op4 as usize], &ops);
+        if prefix == 0xFD {
+            text.swap_ix_iy();
+        }
+        return Insn {
+            len: 4,
+            text,
+            prefix,
+            op: op4,
+        };
+    }
+    let tmpl = MNEM_DDFD[op as usize];
+    if tmpl.starts_with("(prefix ignored)") || tmpl == "-" {
+        text.put_str(if prefix == 0xDD { "DD" } else { "FD" });
+        return Insn {
+            len: 1,
+            text,
+            prefix: 0,
+            op: prefix,
+        };
+    }
+    let (ops, count) = fetch_operands(tmpl, addr.wrapping_add(2), read);
+    expand(&mut text, tmpl, &ops);
+    if prefix == 0xFD {
+        text.swap_ix_iy();
+    }
+    Insn {
+        len: 2 + count,
+        text,
+        prefix,
+        op,
+    }
+}
+
 /// Disassemble the instruction at `addr`, fetching bytes through `read`.
 ///
-/// E11-03 handles the main, CB and ED tables; DD and FD arrive in E11-04 (until then they
-/// report the model text of the main table and a length of 1).
+/// Covers the main, CB, ED, DD/FD and DDCB/FDCB tables.
 pub fn disassemble(addr: u16, read: &mut dyn FnMut(u16) -> u8) -> Insn {
     let first_byte = read(addr);
+    if first_byte == 0xDD || first_byte == 0xFD {
+        return disassemble_index(addr, first_byte, read);
+    }
     let (tmpl, prefix, op, first) = if first_byte == 0xCB {
         let op = read(addr.wrapping_add(1));
         (MNEM_CB[op as usize], 0xCB, op, addr.wrapping_add(2))
@@ -456,5 +514,65 @@ mod tests {
     #[test]
     fn e11_03_reti() {
         assert_eq!(dis(0, &[0xED, 0x4D]).text.as_str(), "RETI");
+    }
+
+    #[test]
+    fn e11_04_ld_ix_nn() {
+        let i = dis(0, &[0xDD, 0x21, 0x34, 0x12]);
+        assert_eq!(i.text.as_str(), "LD IX,$1234");
+        assert_eq!(i.len, 4);
+        assert_eq!(i.prefix, 0xDD);
+    }
+
+    #[test]
+    fn e11_04_ld_b_ix_d() {
+        let i = dis(0, &[0xDD, 0x46, 0x05]);
+        assert_eq!(i.text.as_str(), "LD B,(IX+$05)");
+        assert_eq!(i.len, 3);
+    }
+
+    #[test]
+    fn e11_04_ld_iy_neg() {
+        let i = dis(0, &[0xFD, 0x7E, 0xFE]);
+        assert_eq!(i.text.as_str(), "LD A,(IY-$02)");
+        assert_eq!(i.prefix, 0xFD);
+    }
+
+    #[test]
+    fn e11_04_ld_ixh() {
+        assert_eq!(dis(0, &[0xDD, 0x44]).text.as_str(), "LD B,IXH");
+        assert_eq!(dis(0, &[0xFD, 0x44]).text.as_str(), "LD B,IYH");
+        assert_eq!(dis(0, &[0xFD, 0x4D]).text.as_str(), "LD C,IYL");
+    }
+
+    #[test]
+    fn e11_04_rlc_ix() {
+        let i = dis(0, &[0xDD, 0xCB, 0x05, 0x06]);
+        assert_eq!(i.text.as_str(), "RLC (IX+$05)");
+        assert_eq!(i.len, 4);
+        assert_eq!(i.op, 0x06);
+    }
+
+    #[test]
+    fn e11_04_prefix_alone() {
+        let i = dis(0, &[0xDD, 0x00]);
+        assert_eq!(i.text.as_str(), "DD");
+        assert_eq!(i.len, 1);
+        assert_eq!(dis(0, &[0xFD, 0x00]).text.as_str(), "FD");
+        assert_eq!(dis(0, &[0xDD, 0xDD]).len, 1);
+    }
+
+    #[test]
+    fn e11_04_set_iy_undoc() {
+        let i = dis(0, &[0xFD, 0xCB, 0x01, 0xC0]);
+        assert_eq!(i.text.as_str(), "SET 0,(IY+$01),B");
+        assert_eq!(i.len, 4);
+    }
+
+    #[test]
+    fn e11_04_ld_ix_d_n() {
+        let i = dis(0, &[0xDD, 0x36, 0x05, 0x99]);
+        assert_eq!(i.text.as_str(), "LD (IX+$05),$99");
+        assert_eq!(i.len, 4);
     }
 }
