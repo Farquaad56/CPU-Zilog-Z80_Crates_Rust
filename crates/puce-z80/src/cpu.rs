@@ -71,6 +71,14 @@ impl Cpu {
         }
         self.eng.nmi_prev = nmi;
 
+        // Bus granted: the CPU is frozen and drives only BUSAK until BUSRQ is released.
+        if self.eng.bus_granted {
+            if pins.has(Pins::BUSRQ) {
+                return Pins(0).with(Pins::BUSAK);
+            }
+            self.eng.bus_granted = false;
+        }
+
         // Step 2: If not active, start new instruction with FETCH_PROBE
         if !self.eng.active {
             self.eng.table = Table::Main;
@@ -267,6 +275,11 @@ impl Cpu {
                     self.regs.q = 0;
                 }
                 self.eng.active = false;
+            }
+
+            // BUSRQ is sampled at the last T of every bus cycle (not for I cycles or hooks).
+            if cur.is_bus() && pins.has(Pins::BUSRQ) {
+                self.eng.bus_granted = true;
             }
         }
 

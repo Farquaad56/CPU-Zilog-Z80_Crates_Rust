@@ -64,6 +64,7 @@ impl Cpu {
         self.eng.f_written = false;
         self.eng.irq = IrqKind::None;
         self.eng.int_seq = false;
+        self.eng.bus_granted = false;
         self.eng.nmi_latch = false;
         self.eng.nmi_prev = false;
     }
@@ -704,5 +705,147 @@ mod tests {
         cpu.step(&mut bus);
         assert!(!cpu.regs.iff1);
         assert!(!cpu.regs.iff2);
+    }
+
+    /// One T-state with the memory served by hand (`data` carries the byte read last).
+    fn tick_ram(cpu: &mut Cpu, ram: &mut SimpleRam, data: &mut u8, extra: u64) -> Pins {
+        let out = cpu.tick(Pins(0).set_data(*data).with(extra));
+        if out.is_mem_read() {
+            *data = ram.read(out.addr());
+        }
+        if out.is_mem_write() {
+            ram.write(out.addr(), out.data());
+        }
+        out
+    }
+
+    /// RAM holding `LD A,(0x9000)` at address 0 and 0x42 at 0x9000.
+    fn ld_a_nn_ram() -> SimpleRam {
+        let mut ram = SimpleRam::new();
+        ram.write(0, 0x3A);
+        ram.write(1, 0x00);
+        ram.write(2, 0x90);
+        ram.write(0x9000, 0x42);
+        ram
+    }
+
+    #[test]
+    fn e09_07_busrq_after_cycle() {
+        let mut ram = ld_a_nn_ram();
+        let mut cpu = Cpu::new();
+        let mut data = 0;
+        // BUSRQ rises during the first M1: that cycle (4 T) still completes normally.
+        for t in 0..4 {
+            let extra = if t >= 1 { Pins::BUSRQ } else { 0 };
+            let out = tick_ram(&mut cpu, &mut ram, &mut data, extra);
+            assert!(!out.has(Pins::BUSAK), "T{t} is still part of the cycle");
+        }
+        let out = tick_ram(&mut cpu, &mut ram, &mut data, Pins::BUSRQ);
+        assert!(out.has(Pins::BUSAK));
+    }
+
+    #[test]
+    fn e09_07_busak_pins() {
+        let mut ram = ld_a_nn_ram();
+        let mut cpu = Cpu::new();
+        let mut data = 0;
+        for _ in 0..4 {
+            tick_ram(&mut cpu, &mut ram, &mut data, Pins::BUSRQ);
+        }
+        for _ in 0..5 {
+            let out = tick_ram(&mut cpu, &mut ram, &mut data, Pins::BUSRQ);
+            assert_eq!(out.0, Pins::BUSAK, "only BUSAK, A = 0, D = 0");
+        }
+    }
+
+    #[test]
+    fn e09_07_resume() {
+        let mut ram = ld_a_nn_ram();
+        let mut cpu = Cpu::new();
+        let mut data = 0;
+        let mut n = 0;
+        while n < 100 {
+            // BUSRQ held from the 3rd to the 12th tick.
+            let extra = if (2..12).contains(&n) { Pins::BUSRQ } else { 0 };
+            tick_ram(&mut cpu, &mut ram, &mut data, extra);
+            n += 1;
+            if cpu.at_instruction_boundary() {
+                break;
+            }
+        }
+        assert_eq!(cpu.regs.a, 0x42);
+        assert_eq!(cpu.regs.pc, 3);
+        assert_eq!(cpu.instruction_tstates(), 13);
+        assert!(n > 13, "the granted T-states were added");
+    }
+
+    #[test]
+    fn e09_07_no_progress() {
+        let mut ram = ld_a_nn_ram();
+        let mut cpu = Cpu::new();
+        let mut data = 0;
+        for _ in 0..4 {
+            tick_ram(&mut cpu, &mut ram, &mut data, Pins::BUSRQ);
+        }
+        let (pc, r, ts) = (cpu.regs.pc, cpu.regs.r, cpu.instruction_tstates());
+        for _ in 0..8 {
+            tick_ram(&mut cpu, &mut ram, &mut data, Pins::BUSRQ);
+            assert_eq!(cpu.regs.pc, pc);
+            assert_eq!(cpu.regs.r, r);
+            assert_eq!(cpu.instruction_tstates(), ts);
+        }
+    }
+
+    #[test]
+    fn e09_07_busak_clears() {
+        let mut ram = ld_a_nn_ram();
+        let mut cpu = Cpu::new();
+        let mut data = 0;
+        for _ in 0..6 {
+            tick_ram(&mut cpu, &mut ram, &mut data, Pins::BUSRQ);
+        }
+        let out = tick_ram(&mut cpu, &mut ram, &mut data, 0);
+        assert!(!out.has(Pins::BUSAK));
+        assert!(
+            out.has(Pins::MREQ) || out.addr() != 0,
+            "the next cycle resumes"
+        );
+    }
+
+    /// RAM whose BUSRQ line is high for the first `left` samples.
+    struct BusrqRam {
+        ram: SimpleRam,
+        left: u32,
+    }
+
+    impl Bus for BusrqRam {
+        fn read(&mut self, addr: u16) -> u8 {
+            self.ram.read(addr)
+        }
+        fn write(&mut self, addr: u16, data: u8) {
+            self.ram.write(addr, data);
+        }
+        fn busrq(&mut self) -> bool {
+            if self.left > 0 {
+                self.left -= 1;
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    #[test]
+    fn e09_07_step_with_bus() {
+        let mut bus = BusrqRam {
+            ram: ld_a_nn_ram(),
+            left: 10,
+        };
+        let mut cpu = Cpu::new();
+        let n = cpu.step(&mut bus);
+        // 13 T of instruction + 6 granted T-states (T5..T10) while BUSRQ is high.
+        assert_eq!(n, 19);
+        assert_eq!(cpu.instruction_tstates(), 13);
+        assert_eq!(cpu.regs.a, 0x42);
     }
 }

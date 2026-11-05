@@ -69,6 +69,8 @@ pub(crate) struct Engine {
     pub int_level: bool,
     /// True while an NMI/INT sequence plan runs (its hooks go to `Cpu::int_hook`).
     pub int_seq: bool,
+    /// True while the bus is granted to another master (BUSAK active, CPU frozen).
+    pub bus_granted: bool,
 }
 
 /// Kind of interrupt sequence being started at an instruction boundary.
@@ -116,6 +118,7 @@ impl Engine {
             nmi_prev: false,
             int_level: false,
             int_seq: false,
+            bus_granted: false,
         }
     }
 
