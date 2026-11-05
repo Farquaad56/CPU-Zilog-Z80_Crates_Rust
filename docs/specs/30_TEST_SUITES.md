@@ -10,7 +10,7 @@ doit etre verifie par Hermes (`curl` / `git clone --depth 1`) et note dans `docs
 | ZEXALL | https://raw.githubusercontent.com/superzazu/z80/master/roms/zexall.cim (200, 8588 octets) | idem | idem (drapeaux X/Y inclus) |
 | z80test (Patrik Rak) | https://github.com/raxoft/z80test (UNKNOWN - to confirm: release, formats .tap/.z80/.com) | ZX Spectrum (.tap) probable | z80doc, z80docflags, z80flags, z80full, z80ccf, z80memptr: toutes `Passed` |
 | SingleStepTests/z80 | https://github.com/SingleStepTests/z80 (UNKNOWN - to confirm: dossier `v1/`, fichiers `<opcode>.json`) | JSON: `name, initial, final, cycles` | 100 % des cas (etat final + cycles de bus) |
-| FUSE | UNKNOWN - to confirm: `z80/tests/tests.in` et `tests.expected` du depot fuse-emulator (SourceForge/GitHub) | texte | etat final + evenements de bus MR/MW/PR/PW/MC/PC horodates |
+| FUSE | https://github.com/FUSE-emulator/fuse/tree/master/z80/tests (`tests.in`, `tests.expected`, `README`; 1356 tests; format: `34_FUSE_FORMAT.md`) | texte | etat final + evenements de bus MR/MW/PR/PW/MC/PC horodates |
 | Timing / interruptions (Woodmass, Raxoft) | UNKNOWN - to confirm | ROMs ZX Spectrum | liste exacte a etablir en E13-18 |
 
 Notes:
