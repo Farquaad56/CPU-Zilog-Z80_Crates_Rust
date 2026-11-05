@@ -8,6 +8,28 @@ use crate::engine::IrqKind;
 
 /// NMI acknowledge: M1 of 5 T (byte ignored, PC not incremented), then push PC high and low.
 /// The hook after the last write sets IFF, PC and WZ.
+/// INT acknowledge cycle: 7 T, M1 + IORQ, PC not incremented, byte on the bus latched.
+const IA7: Tok = Tok::new(Kind::F, 7, Addr::None, Reg::None, false);
+
+/// INT mode 1: acknowledge, push PC, jump to 0x0038 (13 T).
+static IM1_PLAN: [Tok; 4] = [
+    IA7,
+    Tok::new(Kind::W, 3, Addr::DecSp, Reg::H, false),
+    Tok::new(Kind::W, 3, Addr::DecSp, Reg::L, false),
+    Tok::new(Kind::X, 0, Addr::None, Reg::None, false),
+];
+
+/// INT mode 2: acknowledge, push PC, X0 builds the vector, read the word, X1 jumps (19 T).
+static IM2_PLAN: [Tok; 7] = [
+    IA7,
+    Tok::new(Kind::W, 3, Addr::DecSp, Reg::H, false),
+    Tok::new(Kind::W, 3, Addr::DecSp, Reg::L, false),
+    Tok::new(Kind::X, 0, Addr::None, Reg::None, false),
+    Tok::new(Kind::R, 3, Addr::Nn, Reg::L, false),
+    Tok::new(Kind::R, 3, Addr::NnPlus1, Reg::H, false),
+    Tok::new(Kind::X, 1, Addr::None, Reg::None, false),
+];
+
 static NMI_PLAN: [Tok; 4] = [
     Tok::new(Kind::F, 5, Addr::None, Reg::None, false),
     Tok::new(Kind::W, 3, Addr::DecSp, Reg::H, false),
@@ -41,6 +63,7 @@ impl Cpu {
         self.eng.ddcb = false;
         self.eng.f_written = false;
         self.eng.irq = IrqKind::None;
+        self.eng.int_seq = false;
         self.eng.nmi_latch = false;
         self.eng.nmi_prev = false;
     }
@@ -58,21 +81,57 @@ impl Cpu {
         self.eng.tmp_l = ret as u8;
         self.eng.plan = &NMI_PLAN;
         self.eng.idx = 0;
+        self.eng.int_seq = true;
     }
 
     /// Hook of an interrupt sequence (called instead of `sem` while one is running).
-    pub(crate) fn int_hook(&mut self, _hook_no: u8) {
-        if self.eng.irq == IrqKind::Nmi {
-            self.regs.iff2 = self.regs.iff1;
-            self.regs.iff1 = false;
-            self.regs.pc = 0x0066;
-            self.regs.wz = 0x0066;
+    pub(crate) fn int_hook(&mut self, hook_no: u8) {
+        match (self.eng.irq, self.regs.im, hook_no) {
+            (IrqKind::Nmi, _, _) => {
+                self.regs.iff2 = self.regs.iff1;
+                self.regs.iff1 = false;
+                self.regs.pc = 0x0066;
+                self.regs.wz = 0x0066;
+            }
+            (IrqKind::Int, 1, 0) => {
+                self.regs.iff1 = false;
+                self.regs.iff2 = false;
+                self.regs.pc = 0x0038;
+                self.regs.wz = 0x0038;
+            }
+            (IrqKind::Int, 2, 0) => {
+                self.regs.iff1 = false;
+                self.regs.iff2 = false;
+                self.regs.wz = ((self.regs.i as u16) << 8) | (self.eng.latched & 0xFE) as u16;
+            }
+            (IrqKind::Int, 2, 1) => {
+                self.regs.pc = ((self.eng.tmp_h as u16) << 8) | self.eng.tmp_l as u16;
+                self.regs.wz = self.regs.pc;
+            }
+            _ => {}
         }
     }
 
     /// Begin the INT sequence (filled in by E09-05/06): for now only records the request.
     pub(crate) fn start_int(&mut self) {
         self.eng.irq = IrqKind::Int;
+        // IM 0 (instruction on the bus) is filled in by E09-06.
+        let plan: &'static [Tok] = match self.regs.im {
+            1 => &IM1_PLAN,
+            2 => &IM2_PLAN,
+            _ => return,
+        };
+        let mut ret = self.regs.pc;
+        if self.regs.halted {
+            ret = ret.wrapping_add(1);
+            self.regs.halted = false;
+            self.eng.halt_cycle = false;
+        }
+        self.eng.tmp_h = (ret >> 8) as u8;
+        self.eng.tmp_l = ret as u8;
+        self.eng.plan = plan;
+        self.eng.idx = 0;
+        self.eng.int_seq = true;
     }
 }
 
@@ -457,5 +516,145 @@ mod tests {
         assert_eq!(cpu.step(&mut ram), 14);
         assert!(cpu.regs.iff1);
         assert_eq!(cpu.regs.pc, 0x1234);
+    }
+
+    /// RAM with a controllable INT line and acknowledge byte; records the acknowledge pins.
+    struct IntRam {
+        ram: SimpleRam,
+        irq: bool,
+        ack: u8,
+        ack_ticks: u32,
+        bad_ack: bool,
+    }
+
+    impl IntRam {
+        fn new() -> IntRam {
+            IntRam {
+                ram: SimpleRam::new(),
+                irq: false,
+                ack: 0xFF,
+                ack_ticks: 0,
+                bad_ack: false,
+            }
+        }
+    }
+
+    impl Bus for IntRam {
+        fn read(&mut self, addr: u16) -> u8 {
+            self.ram.read(addr)
+        }
+        fn write(&mut self, addr: u16, data: u8) {
+            self.ram.write(addr, data);
+        }
+        fn irq(&mut self) -> bool {
+            self.irq
+        }
+        fn int_ack(&mut self) -> u8 {
+            self.ack
+        }
+        fn on_tick(&mut self, pins: Pins) {
+            if pins.is_int_ack() {
+                self.ack_ticks += 1;
+                if pins.has(Pins::MREQ) || pins.has(Pins::RD) {
+                    self.bad_ack = true;
+                }
+            }
+        }
+    }
+
+    /// CPU with interrupts enabled in `im`, SP = 0x8000, after one NOP at 0x0100; INT is raised.
+    fn int_cpu(im: u8) -> (Cpu, IntRam) {
+        let mut bus = IntRam::new();
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x0100;
+        cpu.regs.sp = 0x8000;
+        cpu.regs.iff1 = true;
+        cpu.regs.iff2 = true;
+        cpu.regs.im = im;
+        assert_eq!(cpu.step(&mut bus), 4);
+        bus.irq = true;
+        (cpu, bus)
+    }
+
+    #[test]
+    fn e09_05_im1_13t() {
+        let (mut cpu, mut bus) = int_cpu(1);
+        assert_eq!(cpu.step(&mut bus), 13);
+        assert_eq!(cpu.regs.pc, 0x0038);
+        assert_eq!(cpu.regs.wz, 0x0038);
+        assert_eq!(bus.ram.read(0x7FFF), 0x01);
+        assert_eq!(bus.ram.read(0x7FFE), 0x01);
+        assert_eq!(cpu.regs.sp, 0x7FFE);
+    }
+
+    #[test]
+    fn e09_05_im2_19t() {
+        let (mut cpu, mut bus) = int_cpu(2);
+        cpu.regs.i = 0x40;
+        bus.ack = 0x20;
+        bus.ram.write(0x4020, 0x78);
+        bus.ram.write(0x4021, 0x56);
+        assert_eq!(cpu.step(&mut bus), 19);
+        assert_eq!(cpu.regs.pc, 0x5678);
+        assert_eq!(cpu.regs.wz, 0x5678);
+        assert_eq!(cpu.regs.sp, 0x7FFE);
+    }
+
+    #[test]
+    fn e09_05_im2_vector_bit0() {
+        let (mut cpu, mut bus) = int_cpu(2);
+        cpu.regs.i = 0x40;
+        bus.ack = 0x21;
+        bus.ram.write(0x4020, 0x78);
+        bus.ram.write(0x4021, 0x56);
+        bus.ram.write(0x4022, 0xEE);
+        assert_eq!(cpu.step(&mut bus), 19);
+        assert_eq!(cpu.regs.pc, 0x5678, "bit 0 of the bus byte is masked");
+    }
+
+    #[test]
+    fn e09_05_ack_pins() {
+        let (mut cpu, mut bus) = int_cpu(1);
+        cpu.step(&mut bus);
+        assert!(bus.ack_ticks >= 2, "acknowledge cycle seen");
+        assert!(!bus.bad_ack, "no MREQ or RD during the acknowledge");
+    }
+
+    #[test]
+    fn e09_05_iff_cleared() {
+        for im in 1..=2u8 {
+            let (mut cpu, mut bus) = int_cpu(im);
+            cpu.step(&mut bus);
+            assert!(!cpu.regs.iff1, "IM{im} IFF1");
+            assert!(!cpu.regs.iff2, "IM{im} IFF2");
+        }
+    }
+
+    #[test]
+    fn e09_05_im1_wakes_halt() {
+        let mut bus = IntRam::new();
+        bus.ram.write(0, 0x76);
+        let mut cpu = Cpu::new();
+        cpu.regs.sp = 0x8000;
+        cpu.regs.iff1 = true;
+        cpu.regs.im = 1;
+        assert_eq!(cpu.step(&mut bus), 4);
+        assert!(cpu.regs.halted);
+        bus.irq = true;
+        assert_eq!(cpu.step(&mut bus), 13);
+        assert!(!cpu.regs.halted);
+        assert_eq!(bus.ram.read(0x7FFF), 0x00);
+        assert_eq!(bus.ram.read(0x7FFE), 0x01);
+        assert_eq!(cpu.regs.pc, 0x0038);
+    }
+
+    #[test]
+    fn e09_05_masked_by_di() {
+        let (mut cpu, mut bus) = int_cpu(1);
+        cpu.regs.iff1 = false;
+        assert_eq!(cpu.step(&mut bus), 4);
+        assert_eq!(cpu.step(&mut bus), 4);
+        assert_eq!(bus.ack_ticks, 0);
+        assert_eq!(cpu.regs.pc, 0x0103);
     }
 }

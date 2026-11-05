@@ -67,6 +67,8 @@ pub(crate) struct Engine {
     pub nmi_prev: bool,
     /// Sampled level of the INT pin on the current T-state.
     pub int_level: bool,
+    /// True while an NMI/INT sequence plan runs (its hooks go to `Cpu::int_hook`).
+    pub int_seq: bool,
 }
 
 /// Kind of interrupt sequence being started at an instruction boundary.
@@ -113,6 +115,7 @@ impl Engine {
             nmi_latch: false,
             nmi_prev: false,
             int_level: false,
+            int_seq: false,
         }
     }
 

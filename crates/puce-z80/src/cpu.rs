@@ -3,7 +3,7 @@
 use crate::bus::{Bus, Cycle};
 use crate::engine::addr::resolve;
 use crate::engine::decode::{decode, plan_of, Decoded, Prefix, Table};
-use crate::engine::mcycle::fetch_pins;
+use crate::engine::mcycle::{fetch_pins, int_ack_pins};
 use crate::engine::plan::{Addr, Kind, Reg, Tok, FETCH_PROBE};
 use crate::engine::{Engine, IrqKind};
 use crate::pins::Pins;
@@ -89,6 +89,7 @@ impl Cpu {
             self.eng.halt_cycle = self.regs.halted;
             // Interrupt acceptance at the instruction boundary, before the normal fetch.
             self.eng.irq = crate::engine::IrqKind::None;
+            self.eng.int_seq = false;
             if self.eng.nmi_latch {
                 self.eng.nmi_latch = false;
                 self.start_nmi();
@@ -106,7 +107,9 @@ impl Cpu {
         if self.eng.t == 0 && cur.is_bus() {
             let port = matches!(cur.kind, Kind::N | Kind::O);
             // An M1 cycle always fetches from PC (table F tokens may carry Addr::None).
-            if cur.kind == Kind::F && (self.eng.halt_cycle || self.eng.irq == IrqKind::Nmi) {
+            if cur.kind == Kind::F
+                && (self.eng.halt_cycle || self.eng.irq == IrqKind::Nmi || cur.len == 7)
+            {
                 // HALT NOP / NMI acknowledge cycle: the address is PC and PC does not change.
                 self.eng.cur_addr = self.regs.pc;
             } else {
@@ -139,11 +142,23 @@ impl Cpu {
                 );
                 // Opcode latched at T3: decode and possibly replace the current token.
                 // The byte read during a HALT cycle is ignored (no decode).
-                if self.eng.t == 2 && !self.eng.halt_cycle && self.eng.irq != IrqKind::Nmi {
+                if self.eng.t == 2
+                    && !self.eng.halt_cycle
+                    && self.eng.irq != IrqKind::Nmi
+                    && cur.len != 7
+                {
                     let byte = pins.data();
                     self.eng.latched = byte;
                     self.decode_m1(byte);
                     cur = self.eng.plan[self.eng.idx];
+                }
+                // INT acknowledge (IA7, len 7): M1 + IORQ, the bus byte is latched at the last
+                // wait T-state. UNKNOWN - to confirm: exact latch T (calibrated in E13-10).
+                if cur.len == 7 {
+                    out = int_ack_pins(self.eng.cur_addr, self.eng.t);
+                    if self.eng.t == 5 {
+                        self.eng.latched = pins.data();
+                    }
                 }
             }
             Kind::R => {
@@ -229,7 +244,7 @@ impl Cpu {
                 let next = &self.eng.plan[self.eng.idx];
                 if next.is_hook() {
                     let hook = next.hook_no();
-                    if self.eng.irq == IrqKind::Nmi {
+                    if self.eng.int_seq {
                         self.int_hook(hook);
                     } else {
                         sem(self, self.eng.table, self.eng.op, hook);
@@ -340,12 +355,15 @@ impl Cpu {
             // The bus is called once per cycle even if the CPU repeats its outputs (WAIT).
             let mem_rd = last.has(Pins::MREQ) && last.has(Pins::RD);
             let io_rd = last.has(Pins::IORQ) && last.has(Pins::RD) && !last.has(Pins::M1);
-            if mem_rd || io_rd {
+            let ack = last.is_int_ack();
+            if mem_rd || io_rd || ack {
                 let data = *read_data.get_or_insert_with(|| {
                     if mem_rd {
                         bus.read(last.addr())
-                    } else {
+                    } else if io_rd {
                         bus.io_read(last.addr())
+                    } else {
+                        bus.int_ack()
                     }
                 });
                 pins_in = pins_in.set_data(data);
@@ -416,6 +434,7 @@ impl Cpu {
             return None;
         }
         match self.eng.plan[self.eng.idx].kind {
+            Kind::F if self.eng.plan[self.eng.idx].len == 7 => Some(Cycle::IntAck),
             Kind::F => Some(Cycle::Fetch),
             Kind::R => Some(Cycle::MemRead),
             Kind::W => Some(Cycle::MemWrite),
