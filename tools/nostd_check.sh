@@ -19,6 +19,8 @@ cargo build -p puce-z80 --target "$EMBEDDED" || { echo "FAIL: $EMBEDDED"; exit 1
 if rustup target list --installed 2>/dev/null | grep -qx "$WASM"; then
   echo "== cargo build -p puce-z80 --target $WASM"
   cargo build -p puce-z80 --target "$WASM" || { echo "FAIL: $WASM"; exit 1; }
+  echo "== cargo build -p puce-z80-wasm --target $WASM"
+  cargo build -p puce-z80-wasm --target "$WASM" || { echo "FAIL: puce-z80-wasm"; exit 1; }
 else
   echo "note: $WASM is not installed, WASM build skipped"
 fi
