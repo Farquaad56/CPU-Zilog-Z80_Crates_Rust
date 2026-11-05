@@ -49,12 +49,21 @@ pub(crate) fn is_indexed(op: u8) -> bool {
 /// Ignored opcodes run the Main semantics (the prefix only costs 4 T, taken by the plan).
 /// Indexed opcodes do nothing yet (E08-02..E08-06).
 pub(crate) fn sem_idx(cpu: &mut Cpu, op: u8, hook_no: u8) {
-    if is_indexed(op) && !is_idx_pair_op(op) {
+    if is_indexed(op) && !is_idx_pair_op(op) && !is_idx_mem_ld(op) {
         return;
     }
     // Ignored opcodes and the 16-bit IX/IY forms (E08-02) share the Main semantics:
     // the helpers hl()/set_hl()/rp()/rp2() map HL to IX/IY from eng.prefix.
     sem_main(cpu, op, hook_no);
+}
+
+/// Indexed memory loads implemented by E08-04: LD r,(IX+d) / LD (IX+d),r / LD (IX+d),n.
+/// The other operand stays the real H/L, which is what the Main r8()/set_r8() helpers use.
+/// The address (IX+d) and WZ are resolved by the plan; the byte travels through TMP.L.
+fn is_idx_mem_ld(op: u8) -> bool {
+    let y = (op >> 3) & 7;
+    let z = op & 7;
+    op == 0x36 || (op >> 6 == 1 && op != 0x76 && ((y == 6) != (z == 6)))
 }
 
 /// 16-bit IX/IY forms implemented by E08-02: LD IX,nn / LD (nn),IX / LD IX,(nn) / INC IX / DEC IX /
@@ -279,5 +288,54 @@ mod tests {
         cpu.regs.set_bc(0x0001);
         sem_idx(&mut cpu, 0x09, 0);
         assert_eq!(cpu.regs.wz, 0x2001);
+    }
+
+    #[test]
+    fn e08_04_ld_b_ix_d() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.eng.tmp_l = 0x5A;
+        sem_idx(&mut cpu, 0x46, 0);
+        assert_eq!(cpu.regs.b, 0x5A);
+    }
+
+    #[test]
+    fn e08_04_ld_h_ix_d_real_h() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0x1234;
+        cpu.eng.tmp_l = 0x77;
+        sem_idx(&mut cpu, 0x66, 0);
+        assert_eq!(cpu.regs.h, 0x77);
+        assert_eq!(cpu.regs.ix, 0x1234);
+    }
+
+    #[test]
+    fn e08_04_ld_ix_d_h() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.h = 0x42;
+        cpu.regs.ix = 0x9900;
+        sem_idx(&mut cpu, 0x74, 0);
+        assert_eq!(cpu.eng.tmp_l, 0x42);
+    }
+
+    #[test]
+    fn e08_04_ld_ix_d_n() {
+        // LD (IX+d),n needs no hook: TMP.L already holds n and the plan writes it.
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.eng.tmp_l = 0xC3;
+        sem_idx(&mut cpu, 0x36, 0);
+        assert_eq!(cpu.eng.tmp_l, 0xC3);
+    }
+
+    #[test]
+    fn e08_04_negative_d() {
+        // The classification covers the whole memory-load set, independent of d.
+        for op in [
+            0x46u8, 0x4E, 0x56, 0x5E, 0x66, 0x6E, 0x7E, 0x70, 0x71, 0x77, 0x36,
+        ] {
+            assert!(is_idx_mem_ld(op), "0x{op:02X}");
+        }
+        for op in [0x76u8, 0x44, 0x60, 0x7C, 0x26] {
+            assert!(!is_idx_mem_ld(op), "0x{op:02X}");
+        }
     }
 }
