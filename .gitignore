@@ -8,3 +8,4 @@ docs/qa/inbox/*
 .hermes/
 *.log
 z80_pack.tgz
+tests/e2e/shot_4k.png
