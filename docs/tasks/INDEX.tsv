@@ -145,6 +145,6 @@ E16-06	Documentation du crate (rustdoc + README)	E16	E16-05	0	doc	0	hermes
 E16-07	GATE E16 - reutilisation validee	E16	E16-06	1	gate	0	user
 E17-01	CI de release et changelog	E17	E16-07	0	tooling	60	hermes
 E17-02	GATE FINAL - v0.1.0	E17	E17-01	1	gate	0	user
-E17-03	DIFFEREE: variante CMOS	E17	E17-02	0	code	120	none
-E17-04	DIFFEREE: serialisation de l'etat (save states)	E17	E17-03	0	code	100	none
-E17-05	DIFFEREE: cible WASM du moteur (demo navigateur autonome)	E17	E17-04	0	code	100	none
+E17-03	variante CMOS	E17	E17-02	0	code	120	hermes
+E17-04	serialisation de l'etat (save states)	E17	E17-03	0	code	100	hermes
+E17-05	cible WASM du moteur (demo navigateur autonome)	E17	E17-04	0	code	100	hermes
