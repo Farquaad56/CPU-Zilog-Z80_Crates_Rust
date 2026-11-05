@@ -1,40 +1,12 @@
 {
   "known_failures": [
-    "37",
-    "3f",
     "76",
-    "dd 37",
-    "dd 3f",
     "dd 76",
-    "ed b0",
-    "ed b1",
-    "ed b2",
-    "ed b3",
-    "ed b8",
-    "ed b9",
-    "ed ba",
-    "ed bb",
-    "fd 37",
-    "fd 3f",
     "fd 76"
   ],
   "reasons": {
-    "37": "SCF/CCF: SingleStepTests follows the NMOS formula A | (F ^ Q) with Q=0 after a DD/FD prefix (6000/6000 with that model); the crate keeps SCF_CCF_USES_Q=false because 4 JS diff vectors disagree (D-025, E13-09-Q1)",
-    "3f": "SCF/CCF: SingleStepTests follows the NMOS formula A | (F ^ Q) with Q=0 after a DD/FD prefix (6000/6000 with that model); the crate keeps SCF_CCF_USES_Q=false because 4 JS diff vectors disagree (D-025, E13-09-Q1)",
     "76": "HALT: SingleStepTests moves PC past the HALT, the crate keeps PC on HALT (D-022); recalibrate in E13-10",
-    "dd 37": "SCF/CCF: SingleStepTests follows the NMOS formula A | (F ^ Q) with Q=0 after a DD/FD prefix (6000/6000 with that model); the crate keeps SCF_CCF_USES_Q=false because 4 JS diff vectors disagree (D-025, E13-09-Q1)",
-    "dd 3f": "SCF/CCF: SingleStepTests follows the NMOS formula A | (F ^ Q) with Q=0 after a DD/FD prefix (6000/6000 with that model); the crate keeps SCF_CCF_USES_Q=false because 4 JS diff vectors disagree (D-025, E13-09-Q1)",
     "dd 76": "HALT: SingleStepTests moves PC past the HALT, the crate keeps PC on HALT (D-022); recalibrate in E13-10",
-    "ed b0": "Block repeat (LDIR/LDDR/CPIR/CPDR/INIR/INDR/OTIR/OTDR): X/Y flags on the repeating iteration come from the PC high byte on silicon; 41 JS diff vectors disagree (E10-02-Q1, D-025, E13-09-Q1)",
-    "ed b1": "Block repeat (LDIR/LDDR/CPIR/CPDR/INIR/INDR/OTIR/OTDR): X/Y flags on the repeating iteration come from the PC high byte on silicon; 41 JS diff vectors disagree (E10-02-Q1, D-025, E13-09-Q1)",
-    "ed b2": "Block repeat (LDIR/LDDR/CPIR/CPDR/INIR/INDR/OTIR/OTDR): X/Y flags on the repeating iteration come from the PC high byte on silicon; 41 JS diff vectors disagree (E10-02-Q1, D-025, E13-09-Q1)",
-    "ed b3": "Block repeat (LDIR/LDDR/CPIR/CPDR/INIR/INDR/OTIR/OTDR): X/Y flags on the repeating iteration come from the PC high byte on silicon; 41 JS diff vectors disagree (E10-02-Q1, D-025, E13-09-Q1)",
-    "ed b8": "Block repeat (LDIR/LDDR/CPIR/CPDR/INIR/INDR/OTIR/OTDR): X/Y flags on the repeating iteration come from the PC high byte on silicon; 41 JS diff vectors disagree (E10-02-Q1, D-025, E13-09-Q1)",
-    "ed b9": "Block repeat (LDIR/LDDR/CPIR/CPDR/INIR/INDR/OTIR/OTDR): X/Y flags on the repeating iteration come from the PC high byte on silicon; 41 JS diff vectors disagree (E10-02-Q1, D-025, E13-09-Q1)",
-    "ed ba": "Block repeat (LDIR/LDDR/CPIR/CPDR/INIR/INDR/OTIR/OTDR): X/Y flags on the repeating iteration come from the PC high byte on silicon; 41 JS diff vectors disagree (E10-02-Q1, D-025, E13-09-Q1)",
-    "ed bb": "Block repeat (LDIR/LDDR/CPIR/CPDR/INIR/INDR/OTIR/OTDR): X/Y flags on the repeating iteration come from the PC high byte on silicon; 41 JS diff vectors disagree (E10-02-Q1, D-025, E13-09-Q1)",
-    "fd 37": "SCF/CCF: SingleStepTests follows the NMOS formula A | (F ^ Q) with Q=0 after a DD/FD prefix (6000/6000 with that model); the crate keeps SCF_CCF_USES_Q=false because 4 JS diff vectors disagree (D-025, E13-09-Q1)",
-    "fd 3f": "SCF/CCF: SingleStepTests follows the NMOS formula A | (F ^ Q) with Q=0 after a DD/FD prefix (6000/6000 with that model); the crate keeps SCF_CCF_USES_Q=false because 4 JS diff vectors disagree (D-025, E13-09-Q1)",
     "fd 76": "HALT: SingleStepTests moves PC past the HALT, the crate keeps PC on HALT (D-022); recalibrate in E13-10"
   }
 }

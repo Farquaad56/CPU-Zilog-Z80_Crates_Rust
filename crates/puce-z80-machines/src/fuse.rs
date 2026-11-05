@@ -617,27 +617,14 @@ pub fn compare(result: &FuseResult, expected: &FuseExpected) -> Vec<String> {
 }
 
 /// FUSE tests that are known to disagree with the hardware-accurate behaviour of this crate
-/// (and with SingleStepTests); each entry is documented in DECISIONS.md and
-/// `docs/qa/inbox/E13-14-Q1.md` and is excluded from [`check_all`].
+/// (and with SingleStepTests / z80test); each entry is documented in DECISIONS.md
+/// (D-026) and `docs/qa/inbox/E13-14-Q1.md` and is excluded from [`check_all`].
 pub const KNOWN: &[(&str, &str)] = &[
-    ("37_1", "SCF X/Y: FUSE uses A|F, we use A (D-024/D-025)"),
-    ("3f", "CCF X/Y: FUSE uses A|F, we use A (D-024/D-025)"),
-    (
-        "edb2_1",
-        "INIR repeat: FUSE keeps MEMPTR=BC+1, hardware/SST give PC+1",
-    ),
-    (
-        "edb3_1",
-        "OTIR repeat: FUSE keeps MEMPTR, hardware/SST give PC+1",
-    ),
-    (
-        "edba_1",
-        "INDR repeat: FUSE keeps MEMPTR, hardware/SST give PC+1",
-    ),
-    (
-        "edbb_1",
-        "OTDR repeat: FUSE keeps MEMPTR, hardware/SST give PC+1",
-    ),
+    ("edb9_2", "CPIR repeat: FUSE takes X/Y from the result, silicon from PC high (D-026)"),
+    ("edb2_1", "INIR repeat: FUSE keeps MEMPTR=BC+1 and old H/PV, silicon gives PC+1 (D-026)"),
+    ("edb3_1", "OTIR repeat: FUSE keeps MEMPTR and old H/PV, silicon gives PC+1 (D-026)"),
+    ("edba_1", "INDR repeat: FUSE keeps MEMPTR, silicon gives PC+1 (D-026)"),
+    ("edbb_1", "OTDR repeat: FUSE keeps MEMPTR and old H/PV, silicon gives PC+1 (D-026)"),
 ];
 
 /// Run every test of `tests.in` and compare with `tests.expected` (matched by name).
