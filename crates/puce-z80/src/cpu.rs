@@ -77,6 +77,8 @@ impl Cpu {
             self.eng.ddcb = false;
             // Reset f_written at instruction start
             self.eng.f_written = false;
+            // HALT: the next 'instruction' is an M1 NOP cycle at PC (E09-02).
+            self.eng.halt_cycle = self.regs.halted;
         }
 
         // Step 3: Get current token
@@ -86,12 +88,17 @@ impl Cpu {
         if self.eng.t == 0 && cur.is_bus() {
             let port = matches!(cur.kind, Kind::N | Kind::O);
             // An M1 cycle always fetches from PC (table F tokens may carry Addr::None).
-            let a = if cur.kind == Kind::F {
-                Addr::PcInc
+            if self.eng.halt_cycle {
+                // HALT NOP cycle: the address is PC and PC does not change.
+                self.eng.cur_addr = self.regs.pc;
             } else {
-                cur.addr
-            };
-            self.eng.cur_addr = resolve(self, a, port);
+                let a = if cur.kind == Kind::F {
+                    Addr::PcInc
+                } else {
+                    cur.addr
+                };
+                self.eng.cur_addr = resolve(self, a, port);
+            }
         }
 
         // Step 4: Calculate pins_out for (cur, t)
@@ -110,10 +117,11 @@ impl Cpu {
                     self.regs.r,
                     self.eng.t,
                     cur.len,
-                    false,
+                    self.eng.halt_cycle,
                 );
                 // Opcode latched at T3: decode and possibly replace the current token.
-                if self.eng.t == 2 {
+                // The byte read during a HALT cycle is ignored (no decode).
+                if self.eng.t == 2 && !self.eng.halt_cycle {
                     let byte = pins.data();
                     self.eng.latched = byte;
                     self.decode_m1(byte);

@@ -143,4 +143,64 @@ mod tests {
         assert_eq!(cpu.regs.iy, 0x5555);
         assert_eq!(cpu.regs.bc2(), 0x6666);
     }
+
+    use crate::bus::{Bus, SimpleRam};
+
+    /// CPU that has just executed HALT at address 0 (halted, PC on the HALT opcode).
+    fn halted_cpu() -> (Cpu, SimpleRam) {
+        let mut ram = SimpleRam::new();
+        ram.write(0, 0x76);
+        let mut cpu = Cpu::new();
+        assert_eq!(cpu.step(&mut ram), 4);
+        assert!(cpu.regs.halted);
+        (cpu, ram)
+    }
+
+    #[test]
+    fn e09_02_halt_4t() {
+        let (mut cpu, mut ram) = halted_cpu();
+        for _ in 0..3 {
+            assert_eq!(cpu.step(&mut ram), 4);
+        }
+        assert!(cpu.regs.halted);
+    }
+
+    #[test]
+    fn e09_02_halt_pin() {
+        let (mut cpu, _ram) = halted_cpu();
+        for t in 0..8 {
+            let out = cpu.tick(Pins(0));
+            assert!(out.has(Pins::HALT), "HALT pin active at T{t}");
+        }
+    }
+
+    #[test]
+    fn e09_02_halt_pc_stable() {
+        let (mut cpu, mut ram) = halted_cpu();
+        let pc = cpu.regs.pc;
+        for _ in 0..3 {
+            cpu.step(&mut ram);
+            assert_eq!(cpu.regs.pc, pc);
+        }
+    }
+
+    #[test]
+    fn e09_02_halt_r_increments() {
+        let (mut cpu, mut ram) = halted_cpu();
+        for _ in 0..3 {
+            let r = cpu.regs.r;
+            cpu.step(&mut ram);
+            assert_eq!(cpu.regs.r & 0x7F, (r.wrapping_add(1)) & 0x7F);
+        }
+    }
+
+    #[test]
+    fn e09_02_halt_no_bus_write() {
+        let (mut cpu, _ram) = halted_cpu();
+        for _ in 0..12 {
+            let out = cpu.tick(Pins(0));
+            assert!(!out.has(Pins::WR));
+            assert!(!out.has(Pins::IORQ));
+        }
+    }
 }

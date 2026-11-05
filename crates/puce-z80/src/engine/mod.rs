@@ -57,6 +57,8 @@ pub(crate) struct Engine {
     pub ei_delay: bool,
     /// True while the RESET pin is held active (the reset logic runs once per assertion).
     pub in_reset: bool,
+    /// True while the current M1 is a HALT NOP cycle (no PC increment, no decode).
+    pub halt_cycle: bool,
 }
 
 impl Engine {
@@ -87,6 +89,7 @@ impl Engine {
             f_written: false,
             ei_delay: false,
             in_reset: false,
+            halt_cycle: false,
         }
     }
 
