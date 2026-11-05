@@ -28,18 +28,8 @@ pub mod ssc_cmd;
 #[path = "fuse.rs"]
 pub mod fuse_cmd;
 
-pub mod z80test_cmd {
-    use super::*;
-
-    pub fn run(_args: Z80testArgs) -> Result<(), String> {
-        Err("not implemented".into())
-    }
-
-    #[derive(Debug)]
-    pub struct Z80testArgs {
-        pub rom: PathBuf,
-    }
-}
+#[path = "z80test.rs"]
+pub mod z80test_cmd;
 
 pub mod disasm_cmd {
     use super::*;

@@ -245,11 +245,16 @@ fn ed_rld(cpu: &mut Cpu) {
     cpu.regs.wz = hl(cpu).wrapping_add(1);
 }
 
-/// Repeat step shared by LDxR / CPxR: PC = PC - 2, WZ = PC + 1 (new PC).
+/// Repeat step shared by the eight repeating block instructions: PC = PC - 2, WZ = PC + 1 (new
+/// PC), and bits 3 and 5 of F come from the high byte of the rewound PC (NMOS silicon, proven by
+/// z80test and SingleStepTests, D-026). The flags of the iteration must already be in F.
 fn block_repeat(cpu: &mut Cpu) {
     cpu.regs.pc = cpu.regs.pc.wrapping_sub(2);
     cpu.regs.wz = cpu.regs.pc.wrapping_add(1);
     cpu.eng.cond = true;
+    let xy = flag::X | flag::Y;
+    let f = (cpu.regs.f & !xy) | (((cpu.regs.pc >> 8) as u8) & xy);
+    set_f(cpu, f);
 }
 
 /// LDI / LDD / LDIR / LDDR (y = 4..7, z = 0).
@@ -315,6 +320,37 @@ fn ed_block_cp(cpu: &mut Cpu, y: u8, hook_no: u8) {
     }
 }
 
+/// INIR / INDR / OTIR / OTDR when they loop back (B != 0): H and P/V are recomputed from the
+/// data byte, the carry and the new B (z80test "INIR->NOP'", SingleStepTests ED B2/B3/BA/BB).
+fn io_repeat_flags(cpu: &mut Cpu) {
+    let b = cpu.regs.b;
+    let f = cpu.regs.f;
+    let data = cpu.eng.tmp_l;
+    let par = |v: u8| -> u8 {
+        if alu::parity(v & 7) != 0 {
+            flag::PV
+        } else {
+            0
+        }
+    };
+    let mut nf = f;
+    if f & flag::C != 0 {
+        nf &= !flag::H;
+        let (adj, h) = if data & 0x80 != 0 {
+            (b.wrapping_sub(1), b & 0x0F == 0x00)
+        } else {
+            (b.wrapping_add(1), b & 0x0F == 0x0F)
+        };
+        nf ^= par(adj) ^ flag::PV;
+        if h {
+            nf |= flag::H;
+        }
+    } else {
+        nf ^= par(b) ^ flag::PV;
+    }
+    set_f(cpu, nf);
+}
+
 /// INI / IND / OUTI / OUTD and INIR / INDR / OTIR / OTDR (y = 4..7, z = 2 IN, z = 3 OUT).
 /// X0: B - 1 and flags (IN: TMP.L is the byte read from port BC, before the decrement;
 /// OUT: TMP.L = (HL), the port address uses the decremented B). WZ follows BC.
@@ -350,6 +386,7 @@ fn ed_block_io(cpu: &mut Cpu, y: u8, z: u8, hook_no: u8) {
         let hl_v = cpu.regs.hl().wrapping_add(step);
         cpu.regs.set_hl(hl_v);
         if rep && cpu.regs.b != 0 {
+            io_repeat_flags(cpu);
             block_repeat(cpu);
         }
     }

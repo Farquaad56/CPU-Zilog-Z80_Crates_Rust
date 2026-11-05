@@ -11,17 +11,28 @@ use crate::regs::flag;
 
 /// SCF / CCF take bits 3 and 5 of F from `A | (F ^ Q)` (NMOS Zilog) when true, from `A` alone
 /// (simple reference model) when false.
-/// UNKNOWN - to confirm: the final choice is made in E13-05 / E13-17 (ZEXALL, z80ccf).
-/// Currently false: the DD/FD differential vectors (JS reference) use the simple model;
-/// see docs/qa/inbox/E10-03-Q1.md.
-pub(crate) const SCF_CCF_USES_Q: bool = false;
+/// Decided in E13-17 (D-026): true. z80test (z80ccf, z80flags, z80full on real Zilog silicon)
+/// and SingleStepTests both require the Q model; the JS reference (D-021) is wrong there.
+pub(crate) const SCF_CCF_USES_Q: bool = true;
 
 /// Bits 3 and 5 of F set by SCF / CCF, from A and the previous F / Q.
+///
+/// After a DD / FD prefix the Q latch is 0: the prefix is an instruction on its own that
+/// does not write F.
 fn scf_ccf_xy(a: u8, old_f: u8, q: u8) -> u8 {
     if SCF_CCF_USES_Q {
         (a | (old_f ^ q)) & 0x28
     } else {
         a & 0x28
+    }
+}
+
+/// The Q seen by SCF / CCF: 0 when a DD / FD prefix precedes the opcode.
+fn scf_ccf_q(cpu: &Cpu) -> u8 {
+    if cpu.eng.prefix == crate::engine::decode::Prefix::None {
+        cpu.regs.q
+    } else {
+        0
     }
 }
 
@@ -362,22 +373,22 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
 
             // SCF: C=1, H=N=0, S Z P/V unchanged, X Y from A | (F ^ Q) (see SCF_CCF_USES_Q)
             6 => {
-                let flags = (old_f & (flag::S | flag::Z | flag::PV))
-                    | flag::C
-                    | scf_ccf_xy(a, old_f, cpu.regs.q);
+                let q = scf_ccf_q(cpu);
+                let flags =
+                    (old_f & (flag::S | flag::Z | flag::PV)) | flag::C | scf_ccf_xy(a, old_f, q);
                 set_f(cpu, flags);
             }
 
             // CCF: H = old C, C = !old C, N=0, S Z P/V unchanged, X Y from A | (F ^ Q)
             7 => {
+                let q = scf_ccf_q(cpu);
                 let c_or_h = if old_f & flag::C != 0 {
                     flag::H
                 } else {
                     flag::C
                 };
-                let flags = (old_f & (flag::S | flag::Z | flag::PV))
-                    | c_or_h
-                    | scf_ccf_xy(a, old_f, cpu.regs.q);
+                let flags =
+                    (old_f & (flag::S | flag::Z | flag::PV)) | c_or_h | scf_ccf_xy(a, old_f, q);
                 set_f(cpu, flags);
             }
             _ => {}

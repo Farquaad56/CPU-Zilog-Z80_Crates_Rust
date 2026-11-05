@@ -46,8 +46,17 @@ enum Commands {
     },
     /// Run FUSE test ROMs from a directory
     Fuse { dir: PathBuf },
-    /// Run Z80test ROM
-    Z80test { rom: PathBuf },
+    /// Run a z80test program (.tap) on the minimal ZX Spectrum
+    Z80test {
+        /// The .tap file (z80doc.tap, z80full.tap, ...)
+        tap: PathBuf,
+        /// Optional 16 KiB ZX Spectrum 48K ROM image
+        #[arg(long)]
+        rom: Option<PathBuf>,
+        /// Stop after this many 50 Hz frames
+        #[arg(long)]
+        max_frames: Option<u64>,
+    },
     /// Disassemble a binary file
     Disasm { file: PathBuf, org: String },
     /// Fetch test ROMs and data files
@@ -77,9 +86,15 @@ fn main() {
             cycles,
         }),
         Commands::Fuse { dir } => commands::fuse_cmd::run(commands::fuse_cmd::FuseArgs { dir }),
-        Commands::Z80test { rom } => {
-            commands::z80test_cmd::run(commands::z80test_cmd::Z80testArgs { rom })
-        }
+        Commands::Z80test {
+            tap,
+            rom,
+            max_frames,
+        } => commands::z80test_cmd::run(commands::z80test_cmd::Z80testArgs {
+            tap,
+            rom,
+            max_frames,
+        }),
         Commands::Disasm { file, org } => {
             commands::disasm_cmd::run(commands::disasm_cmd::DisasmArgs { file, org })
         }
