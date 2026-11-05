@@ -34,6 +34,9 @@ pub mod z80test_cmd;
 #[path = "bench.rs"]
 pub mod bench_cmd;
 
+#[path = "all.rs"]
+pub mod all_cmd;
+
 pub mod disasm_cmd {
     use super::*;
 

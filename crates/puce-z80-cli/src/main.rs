@@ -24,11 +24,17 @@ enum Commands {
     },
     /// Run a test suite by name
     Suite {
-        /// prelim, zexdoc or zexall
+        /// prelim, zexdoc, zexall or all
         name: String,
         /// Stop after this many instructions
         #[arg(long)]
         max_instr: Option<u64>,
+        /// With `all`: comma-separated suites to leave out
+        #[arg(long)]
+        skip: Option<String>,
+        /// With `all`: write the summary as JSON to this file
+        #[arg(long)]
+        json: Option<PathBuf>,
     },
     /// Run SingleStepTests from a directory
     Ssc {
@@ -77,8 +83,17 @@ fn main() {
         Commands::Cpm { rom, max_instr } => {
             commands::cpm_cmd::run(commands::cpm_cmd::CpmArgs { rom, max_instr })
         }
-        Commands::Suite { name, max_instr } => {
-            commands::suite_cmd::run(commands::suite_cmd::SuiteArgs { name, max_instr })
+        Commands::Suite {
+            name,
+            max_instr,
+            skip,
+            json,
+        } => {
+            if name == "all" {
+                commands::all_cmd::run(commands::all_cmd::AllArgs { skip, json })
+            } else {
+                commands::suite_cmd::run(commands::suite_cmd::SuiteArgs { name, max_instr })
+            }
         }
         Commands::Ssc {
             dir,
