@@ -16,9 +16,11 @@ default = []
 inspect = []
 disasm = []
 std = []
+serde = ["dep:serde"]
 stub-sem = []
 
 [dependencies]
+serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
