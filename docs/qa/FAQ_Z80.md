@@ -37,3 +37,10 @@ Verifie le 2026-11-05 (E13-01) avec `git clone --depth 1` / HTTP HEAD depuis la 
   `tests.expected` (323000 octets) et `README` (2469 octets) repondent 200.
 - ROMs de timing / interruptions (Woodmass, Raxoft): non verifiees ici, la liste exacte est etablie en E13-18.
 - `fetch_roms.py --optional singlestep,z80test` clone dans `tests/roms/<nom>/` (jamais commite).
+
+## z80test: sortie et execution (E13-15)
+
+- Detail complet: `docs/specs/35_Z80TEST.md`. Le message de reussite est `Result: all tests passed.` (pas "Passed" comme dit dans 30_TEST_SUITES.md); en cas d'echec: `Result: <n> of <m> tests failed.` et, par test, `FAILED` + `CRC:... Expected:...`.
+- Le programme ne retourne aucun code: il imprime par RST 10h (codes 13, 23+2 octets de TAB, 127). Il faut `0xBF` en lecture du port 0xFE, sinon les tests IN sont refuses.
+- Une ROM 48K n'est pas obligatoire: simuler `0x1601` (CHAN-OPEN = RET) et `0x0010` (capture de A) suffit; CODE charge en `0x8000`, entree `0x8000`.
+- Les `.tap` sont dans la release v1.2a (zip), pas dans le depot git.
