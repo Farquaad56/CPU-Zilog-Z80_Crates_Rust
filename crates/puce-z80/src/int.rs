@@ -65,6 +65,7 @@ impl Cpu {
         self.eng.irq = IrqKind::None;
         self.eng.int_seq = false;
         self.eng.bus_granted = false;
+        self.eng.wz_post = None;
         self.eng.nmi_latch = false;
         self.eng.nmi_prev = false;
     }

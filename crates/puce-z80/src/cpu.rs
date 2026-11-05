@@ -93,6 +93,7 @@ impl Cpu {
             self.eng.ddcb = false;
             // Reset f_written at instruction start
             self.eng.f_written = false;
+            self.eng.wz_post = None;
             // HALT: the next 'instruction' is an M1 NOP cycle at PC (E09-02).
             self.eng.halt_cycle = self.regs.halted;
             // Interrupt acceptance at the instruction boundary, before the normal fetch.
@@ -268,6 +269,10 @@ impl Cpu {
 
             // If plan complete, mark as inactive (instruction boundary)
             if self.eng.idx >= self.eng.plan.len() {
+                // Final WZ that depends on the last bus cycle (LD (nn),A, OUT (n),A, ...).
+                if let Some(v) = self.eng.wz_post.take() {
+                    self.regs.wz = v;
+                }
                 // Q factor: at instruction boundary, copy F to Q if F was written
                 if self.eng.f_written {
                     self.regs.q = self.regs.f;
