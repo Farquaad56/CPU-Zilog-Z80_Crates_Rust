@@ -49,10 +49,21 @@ pub(crate) fn is_indexed(op: u8) -> bool {
 /// Ignored opcodes run the Main semantics (the prefix only costs 4 T, taken by the plan).
 /// Indexed opcodes do nothing yet (E08-02..E08-06).
 pub(crate) fn sem_idx(cpu: &mut Cpu, op: u8, hook_no: u8) {
-    if is_indexed(op) {
+    if is_indexed(op) && !is_idx_pair_op(op) {
         return;
     }
+    // Ignored opcodes and the 16-bit IX/IY forms (E08-02) share the Main semantics:
+    // the helpers hl()/set_hl()/rp()/rp2() map HL to IX/IY from eng.prefix.
     sem_main(cpu, op, hook_no);
+}
+
+/// 16-bit IX/IY forms implemented by E08-02: LD IX,nn / LD (nn),IX / LD IX,(nn) / INC IX / DEC IX /
+/// POP IX / EX (SP),IX / PUSH IX / JP (IX) / LD SP,IX.
+fn is_idx_pair_op(op: u8) -> bool {
+    matches!(
+        op,
+        0x21 | 0x22 | 0x2A | 0x23 | 0x2B | 0xE1 | 0xE3 | 0xE5 | 0xE9 | 0xF9
+    )
 }
 
 /// Execute DD CB / FD CB instruction semantics (stub).
@@ -106,5 +117,119 @@ mod tests {
         sem_idx(&mut cpu, 0x11, 0);
         assert_eq!(cpu.regs.de(), 0x00FF);
         assert!(!is_indexed(0x11));
+    }
+
+    use crate::engine::decode::Prefix;
+
+    fn with_prefix(prefix: Prefix) -> Cpu {
+        let mut cpu = Cpu::new();
+        cpu.eng.prefix = prefix;
+        cpu
+    }
+
+    #[test]
+    fn e08_02_ld_ix_nn() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.wz = 0xBEEF;
+        sem_idx(&mut cpu, 0x21, 0);
+        assert_eq!(cpu.regs.ix, 0xBEEF);
+        assert_eq!(cpu.regs.hl(), Cpu::new().regs.hl());
+    }
+
+    #[test]
+    fn e08_02_ld_iy_nn() {
+        let mut cpu = with_prefix(Prefix::Fd);
+        cpu.regs.wz = 0x1234;
+        sem_idx(&mut cpu, 0x21, 0);
+        assert_eq!(cpu.regs.iy, 0x1234);
+    }
+
+    #[test]
+    fn e08_02_inc_ix() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0xFFFF;
+        sem_idx(&mut cpu, 0x23, 0);
+        assert_eq!(cpu.regs.ix, 0x0000);
+        sem_idx(&mut cpu, 0x2B, 0);
+        assert_eq!(cpu.regs.ix, 0xFFFF);
+    }
+
+    #[test]
+    fn e08_02_jp_ix() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0x4000;
+        sem_idx(&mut cpu, 0xE9, 0);
+        assert_eq!(cpu.regs.pc, 0x4000);
+    }
+
+    #[test]
+    fn e08_02_ld_sp_ix() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0x8000;
+        sem_idx(&mut cpu, 0xF9, 0);
+        assert_eq!(cpu.regs.sp, 0x8000);
+    }
+
+    #[test]
+    fn e08_02_ex_de_hl_ignored() {
+        // DD EB swaps DE and HL (never IX/IY): the opcode is not in the indexed set.
+        assert!(!is_indexed(0xEB));
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.set_de(0x1111);
+        cpu.regs.set_hl(0x2222);
+        cpu.regs.ix = 0x3333;
+        sem_idx(&mut cpu, 0xEB, 0);
+        assert_eq!(cpu.regs.de(), 0x2222);
+        assert_eq!(cpu.regs.hl(), 0x1111);
+        assert_eq!(cpu.regs.ix, 0x3333);
+    }
+
+    #[test]
+    fn e08_02_ld_nn_ix() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0xABCD;
+        sem_idx(&mut cpu, 0x22, 0);
+        assert_eq!(cpu.eng.tmp_l, 0xCD);
+        assert_eq!(cpu.eng.tmp_h, 0xAB);
+    }
+
+    #[test]
+    fn e08_02_ld_ix_nn_mem() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.eng.tmp_l = 0x34;
+        cpu.eng.tmp_h = 0x12;
+        cpu.regs.wz = 0x2000;
+        sem_idx(&mut cpu, 0x2A, 0);
+        assert_eq!(cpu.regs.ix, 0x1234);
+        assert_eq!(cpu.regs.wz, 0x2001);
+    }
+
+    #[test]
+    fn e08_02_push_ix() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0x1234;
+        sem_idx(&mut cpu, 0xE5, 0);
+        assert_eq!(cpu.eng.tmp_h, 0x12);
+        assert_eq!(cpu.eng.tmp_l, 0x34);
+    }
+
+    #[test]
+    fn e08_02_pop_iy() {
+        let mut cpu = with_prefix(Prefix::Fd);
+        cpu.eng.tmp_l = 0x78;
+        cpu.eng.tmp_h = 0x56;
+        sem_idx(&mut cpu, 0xE1, 0);
+        assert_eq!(cpu.regs.iy, 0x5678);
+    }
+
+    #[test]
+    fn e08_02_ex_sp_ix() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0xAAAA;
+        cpu.regs.wz = 0xBBBB; // value read from the stack by the plan
+        sem_idx(&mut cpu, 0xE3, 0);
+        assert_eq!(cpu.regs.ix, 0xBBBB);
+        assert_eq!(cpu.eng.tmp_h, 0xAA);
+        assert_eq!(cpu.eng.tmp_l, 0xAA);
     }
 }

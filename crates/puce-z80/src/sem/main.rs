@@ -160,8 +160,9 @@ pub(crate) fn sem_main(cpu: &mut Cpu, op: u8, hook_no: u8) {
             }
             // LD (nn),HL: store HL at absolute address nn
             4 => {
-                cpu.eng.tmp_l = cpu.regs.l;
-                cpu.eng.tmp_h = cpu.regs.h;
+                let v = hl(cpu);
+                cpu.eng.tmp_l = v as u8;
+                cpu.eng.tmp_h = (v >> 8) as u8;
             }
             // LD HL,(nn): load from absolute address nn into HL
             5 => {
