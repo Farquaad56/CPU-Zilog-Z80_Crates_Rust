@@ -889,3 +889,9 @@ fn e08_09_ddfd_all() {
 fn e08_09_ddcb_all() {
     run_whole_table("ddcb", 1536);
 }
+
+/// E08-10: every differential vector of every table (7632 = 1512 + 1536 + 1536 + 1512 + 1536).
+#[test]
+fn e08_10_all_vectors() {
+    run_whole_table("all", 7632);
+}
