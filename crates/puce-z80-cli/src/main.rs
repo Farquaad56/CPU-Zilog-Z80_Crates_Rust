@@ -18,6 +18,8 @@ enum Commands {
     /// CP/M mode with BDOS calls
     Cpm {
         rom: PathBuf,
+        /// Stop after this many instructions
+        #[arg(long)]
         max_instr: Option<u64>,
     },
     /// Run a test suite by name

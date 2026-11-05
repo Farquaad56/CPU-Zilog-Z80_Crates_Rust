@@ -16,19 +16,8 @@ pub mod run_cmd {
     }
 }
 
-pub mod cpm_cmd {
-    use super::*;
-
-    pub fn run(_args: CpmArgs) -> Result<(), String> {
-        Err("not implemented".into())
-    }
-
-    #[derive(Debug)]
-    pub struct CpmArgs {
-        pub rom: PathBuf,
-        pub max_instr: Option<u64>,
-    }
-}
+#[path = "cpm.rs"]
+pub mod cpm_cmd;
 
 pub mod suite_cmd {
     pub fn run(_args: SuiteArgs) -> Result<(), String> {
