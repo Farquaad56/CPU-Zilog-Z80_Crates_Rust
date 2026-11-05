@@ -49,7 +49,7 @@ pub(crate) fn is_indexed(op: u8) -> bool {
 /// Ignored opcodes run the Main semantics (the prefix only costs 4 T, taken by the plan).
 /// Indexed opcodes do nothing yet (E08-02..E08-06).
 pub(crate) fn sem_idx(cpu: &mut Cpu, op: u8, hook_no: u8) {
-    if is_indexed(op) && !is_idx_pair_op(op) && !is_idx_mem_ld(op) {
+    if is_indexed(op) && !is_idx_pair_op(op) && !is_idx_mem_ld(op) && !is_idx_mem_alu(op) {
         return;
     }
     // Ignored opcodes and the 16-bit IX/IY forms (E08-02) share the Main semantics:
@@ -64,6 +64,13 @@ fn is_idx_mem_ld(op: u8) -> bool {
     let y = (op >> 3) & 7;
     let z = op & 7;
     op == 0x36 || (op >> 6 == 1 && op != 0x76 && ((y == 6) != (z == 6)))
+}
+
+/// Indexed memory ALU forms implemented by E08-05: ALU A,(IX+d), INC (IX+d), DEC (IX+d).
+/// The operand travels through TMP.L (read by the plan, written back for INC/DEC), which is
+/// what the Main r8()/set_r8() helpers use for index 6.
+fn is_idx_mem_alu(op: u8) -> bool {
+    op == 0x34 || op == 0x35 || (op >> 6 == 2 && op & 7 == 6)
 }
 
 /// 16-bit IX/IY forms implemented by E08-02: LD IX,nn / LD (nn),IX / LD IX,(nn) / INC IX / DEC IX /
@@ -337,5 +344,42 @@ mod tests {
         for op in [0x76u8, 0x44, 0x60, 0x7C, 0x26] {
             assert!(!is_idx_mem_ld(op), "0x{op:02X}");
         }
+    }
+
+    #[test]
+    fn e08_05_add_a_ix_d() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.a = 0x10;
+        cpu.eng.tmp_l = 0x22;
+        sem_idx(&mut cpu, 0x86, 0);
+        assert_eq!(cpu.regs.a, 0x32);
+    }
+
+    #[test]
+    fn e08_05_cp_ix_d() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.a = 0x40;
+        cpu.eng.tmp_l = 0x40;
+        sem_idx(&mut cpu, 0xBE, 0);
+        assert_eq!(cpu.regs.a, 0x40);
+        assert_ne!(cpu.regs.f & crate::regs::flag::Z, 0);
+    }
+
+    #[test]
+    fn e08_05_inc_ix_d() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.eng.tmp_l = 0xFF;
+        sem_idx(&mut cpu, 0x34, 0);
+        assert_eq!(cpu.eng.tmp_l, 0x00);
+        assert_ne!(cpu.regs.f & crate::regs::flag::Z, 0);
+    }
+
+    #[test]
+    fn e08_05_dec_iy_d() {
+        let mut cpu = with_prefix(Prefix::Fd);
+        cpu.eng.tmp_l = 0x01;
+        sem_idx(&mut cpu, 0x35, 0);
+        assert_eq!(cpu.eng.tmp_l, 0x00);
+        assert_ne!(cpu.regs.f & crate::regs::flag::N, 0);
     }
 }
