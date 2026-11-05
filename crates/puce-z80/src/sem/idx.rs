@@ -58,11 +58,23 @@ pub(crate) fn sem_idx(cpu: &mut Cpu, op: u8, hook_no: u8) {
 }
 
 /// 16-bit IX/IY forms implemented by E08-02: LD IX,nn / LD (nn),IX / LD IX,(nn) / INC IX / DEC IX /
-/// POP IX / EX (SP),IX / PUSH IX / JP (IX) / LD SP,IX.
+/// POP IX / EX (SP),IX / PUSH IX / JP (IX) / LD SP,IX, plus ADD IX,rp (E08-03).
 fn is_idx_pair_op(op: u8) -> bool {
     matches!(
         op,
-        0x21 | 0x22 | 0x2A | 0x23 | 0x2B | 0xE1 | 0xE3 | 0xE5 | 0xE9 | 0xF9
+        0x21 | 0x22
+            | 0x2A
+            | 0x23
+            | 0x2B
+            | 0xE1
+            | 0xE3
+            | 0xE5
+            | 0xE9
+            | 0xF9
+            | 0x09
+            | 0x19
+            | 0x29
+            | 0x39
     )
 }
 
@@ -231,5 +243,41 @@ mod tests {
         assert_eq!(cpu.regs.ix, 0xBBBB);
         assert_eq!(cpu.eng.tmp_h, 0xAA);
         assert_eq!(cpu.eng.tmp_l, 0xAA);
+    }
+
+    #[test]
+    fn e08_03_add_ix_bc() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0x1000;
+        cpu.regs.set_bc(0x0234);
+        sem_idx(&mut cpu, 0x09, 0);
+        assert_eq!(cpu.regs.ix, 0x1234);
+    }
+
+    #[test]
+    fn e08_03_add_ix_ix() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0x8001;
+        sem_idx(&mut cpu, 0x29, 0);
+        assert_eq!(cpu.regs.ix, 0x0002);
+        assert_ne!(cpu.regs.f & crate::regs::flag::C, 0);
+    }
+
+    #[test]
+    fn e08_03_add_iy_sp() {
+        let mut cpu = with_prefix(Prefix::Fd);
+        cpu.regs.iy = 0x0100;
+        cpu.regs.sp = 0x0023;
+        sem_idx(&mut cpu, 0x39, 0);
+        assert_eq!(cpu.regs.iy, 0x0123);
+    }
+
+    #[test]
+    fn e08_03_wz() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.regs.ix = 0x2000;
+        cpu.regs.set_bc(0x0001);
+        sem_idx(&mut cpu, 0x09, 0);
+        assert_eq!(cpu.regs.wz, 0x2001);
     }
 }
