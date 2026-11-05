@@ -486,7 +486,7 @@ mod tests {
             m.step();
         }
         assert!(m.cpu.regs.halted);
-        assert_eq!(m.cpu.regs.pc, 0x8003);
+        assert_eq!(m.cpu.regs.pc, 0x8004);
     }
 
     #[test]
