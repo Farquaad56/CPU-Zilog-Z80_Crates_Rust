@@ -160,6 +160,7 @@ fn ed_ld_r_a(cpu: &mut Cpu) {
 /// LD A,I (ED 57): load interrupt vector into A, set flags.
 /// Flags: S,Z,Y,X from value; H=N=0; PV=IFF2; C unchanged.
 fn ed_ld_a_i(cpu: &mut Cpu) {
+    cpu.eng.ld_air_now = true;
     let v = cpu.regs.i;
     cpu.regs.a = v;
     let mut flags = (cpu.regs.f & flag::C) | (v & 0xA8);
@@ -175,6 +176,7 @@ fn ed_ld_a_i(cpu: &mut Cpu) {
 /// LD A,R (ED 5F): load refresh register into A, set flags.
 /// Same flag behavior as LD A,I.
 fn ed_ld_a_r(cpu: &mut Cpu) {
+    cpu.eng.ld_air_now = true;
     let v = cpu.regs.r;
     cpu.regs.a = v;
     let mut flags = (cpu.regs.f & flag::C) | (v & 0xA8);

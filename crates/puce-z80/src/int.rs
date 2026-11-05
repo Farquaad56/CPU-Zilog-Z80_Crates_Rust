@@ -5,6 +5,7 @@
 use crate::cpu::Cpu;
 use crate::engine::plan::{Addr, Kind, Reg, Tok};
 use crate::engine::IrqKind;
+use crate::regs::flag;
 
 /// NMI acknowledge: M1 of 5 T (byte ignored, PC not incremented), then push PC high and low.
 /// The hook after the last write sets IFF, PC and WZ.
@@ -134,6 +135,10 @@ impl Cpu {
     /// Begin the INT sequence (filled in by E09-05/06): for now only records the request.
     pub(crate) fn start_int(&mut self) {
         self.eng.irq = IrqKind::Int;
+        // NMOS bug: an INT accepted right after LD A,I / LD A,R resets P/V (D-006).
+        if self.eng.last_ld_air {
+            self.regs.f &= !flag::PV;
+        }
         // IM 0 runs the same plan as IM 1; its hook decodes the byte read on the bus.
         let plan: &'static [Tok] = match self.regs.im {
             2 => &IM2_PLAN,
