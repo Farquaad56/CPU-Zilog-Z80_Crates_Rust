@@ -39,7 +39,8 @@ pub(crate) mod tables;
 // pub mod cpu;     Cpu struct: new/reset/tick/step/at_instruction_boundary
 pub mod alu;
 // pub mod sem;     Instruction semantics dispatch
-// pub mod int;     NMI, INT, HALT, RESET handling
+// NMI, INT, HALT, RESET handling (RESET since E09-01).
+pub(crate) mod int;
 
 /// Internal API exposed for integration tests.
 #[doc(hidden)]

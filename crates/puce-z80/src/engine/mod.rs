@@ -55,6 +55,8 @@ pub(crate) struct Engine {
     pub f_written: bool,
     /// EI delay flag: true after EI until next instruction completes (E09).
     pub ei_delay: bool,
+    /// True while the RESET pin is held active (the reset logic runs once per assertion).
+    pub in_reset: bool,
 }
 
 impl Engine {
@@ -84,6 +86,7 @@ impl Engine {
             cur_addr: 0,
             f_written: false,
             ei_delay: false,
+            in_reset: false,
         }
     }
 

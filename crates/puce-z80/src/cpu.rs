@@ -30,12 +30,15 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    /// Create a new CPU in its initial state (all registers zeroed, engine idle).
+    /// Create a new CPU in its power-on state: the registers are zeroed, then `reset()` runs
+    /// (AF = SP = 0xFFFF, PC = 0, engine idle).
     pub fn new() -> Cpu {
-        Cpu {
+        let mut cpu = Cpu {
             regs: Regs::default(),
             eng: Engine::new(),
-        }
+        };
+        cpu.reset();
+        cpu
     }
 
     /// Returns true when the CPU is at an instruction boundary (not mid-instruction).
@@ -48,6 +51,18 @@ impl Cpu {
     /// `pins_in` contains inputs seen by the CPU during this T-state.
     /// Returns outputs after this T-state.
     pub fn tick(&mut self, pins: Pins) -> Pins {
+        // RESET: the reset logic runs once when the pin goes active (even if it stays active for
+        // fewer than the 3 T of the real chip: the crate resets anyway). While it is held, the
+        // outputs are inactive and no instruction runs; the next tick after release starts one.
+        if pins.has(Pins::RESET) {
+            if !self.eng.in_reset {
+                self.reset();
+                self.eng.in_reset = true;
+            }
+            return Pins(0);
+        }
+        self.eng.in_reset = false;
+
         // Step 2: If not active, start new instruction with FETCH_PROBE
         if !self.eng.active {
             self.eng.table = Table::Main;
