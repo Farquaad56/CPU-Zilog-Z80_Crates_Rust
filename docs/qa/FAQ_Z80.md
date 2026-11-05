@@ -17,3 +17,23 @@ Normal (D-003 et .gitignore). Utiliser `python docs/tools/fetch_roms.py`. URL en
 
 ## Q: Quelle valeur pour R apres reset, registres indefinis?
 UNKNOWN - to confirm (Q-001). Defaut du crate: AF=SP=0xFFFF, autres registres inchanges (D-006).
+
+## ROMs: sources verifiees
+Verifie le 2026-11-05 (E13-01) avec `git clone --depth 1` / HTTP HEAD depuis la machine du projet.
+
+- PRELIM / ZEXDOC / ZEXALL: les 3 URL superzazu/z80 repondent 200; tailles 1280 / 8588 / 8588; SHA-256 dans `tests/manifest.toml`.
+- z80test (Patrik Rak): https://github.com/raxoft/z80test, clone ok, commit c490c0ca94f1021509f8bd656b413861bd7cfb41 (2023-12-02).
+  Le depot ne contient QUE les sources: `src/*.asm` (main, tests, z80full, z80doc, z80flags, z80docflags, z80ccf, z80ccfscr, z80memptr, ...),
+  `img/`, `readme.txt`, `changes.txt`, `license.txt`. Pas de .tap dans le depot.
+  Les .tap precompiles sont dans les RELEASES: https://github.com/raxoft/z80test/releases/download/v1.2a/z80test-1.2a.zip
+  (dernier tag v1.2a; contient z80full.tap, z80doc.tap, z80flags.tap, z80docflags.tap, z80ccf.tap, z80memptr.tap, z80ccfscr.tap).
+  Pour E13-15: telecharger ce zip (aucune ROM Spectrum dedans), ne pas assembler.
+- SingleStepTests/z80: https://github.com/SingleStepTests/z80, clone ok, commit ebe1875d48f374bcfd4b505d8eb8ee751568b5f7 (2026-04-11).
+  Arborescence: `v1/` (1604 fichiers .json, ~600-770 Ko chacun, 1000 cas par fichier), `generation/`, `.github/`, `README.MD`, `LICENSE`.
+  Noms de fichiers: `00.json` (main), `cb 34.json`, `dd 00.json`, `ed ..`, `fd ..`, `dd cb __ 00.json` (DDCB/FDCB).
+  Cas: `name, initial, final, cycles`; `initial/final` = a b c d e f h l i r af_ bc_ de_ hl_ ix iy pc sp wz iff1 iff2 im ei p q ram.
+  `cycles` = liste de `[adresse, donnee|null, "rwmi"-style pins]`, ex. `[19935, null, "----"]`, `[19935, null, "r-m-"]` (detail: E13-06).
+- FUSE: https://raw.githubusercontent.com/FUSE-emulator/fuse/master/z80/tests/tests.in (161511 octets),
+  `tests.expected` (323000 octets) et `README` (2469 octets) repondent 200.
+- ROMs de timing / interruptions (Woodmass, Raxoft): non verifiees ici, la liste exacte est etablie en E13-18.
+- `fetch_roms.py --optional singlestep,z80test` clone dans `tests/roms/<nom>/` (jamais commite).
