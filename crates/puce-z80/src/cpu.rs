@@ -31,6 +31,7 @@ static DDCB_HEAD: [Tok; 4] = [
 /// | `LD A,I` / `LD A,R` followed by INT | P/V is reset (bug) | no bug |
 /// | `SCF` / `CCF` bits 3 and 5 | `A or (F xor Q)` | `A or F` (no Q) |
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Variant {
     /// NMOS Zilog Z80 (default): the behaviour of the original silicon.
     #[default]

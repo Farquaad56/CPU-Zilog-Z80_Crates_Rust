@@ -37,6 +37,7 @@
 //! * `std`: enables `SimpleRam::boxed`.
 //! * `inspect`: journal of the last ALU operation and bus activity, for debuggers.
 //! * `disasm`: instruction disassembler.
+//! * `serde`: `Serialize` / `Deserialize` for [`Regs`], [`Variant`] and [`CpuState`] (save states).
 //!
 //! Complete hosts (CP/M, ZX-like contention, shared bus, IM 2 with a CTC) are in `examples/`.
 
@@ -54,6 +55,7 @@ pub use bus::{Bus, Cycle, SimpleRam};
 pub use cpu::{Cpu, Variant};
 pub use pins::Pins;
 pub use regs::Regs;
+pub use state::CpuState;
 
 // Module declarations - uncommented as each is implemented in subsequent tasks.
 // Execution engine (decode, plan, mcycle).
@@ -64,6 +66,8 @@ pub mod pins;
 pub mod regs;
 // CPU top-level struct and tick interface.
 pub mod cpu;
+
+mod state;
 // Bus trait and SimpleRam test implementation.
 pub mod bus;
 // Instruction semantics dispatch (stub, filled by E05+).
