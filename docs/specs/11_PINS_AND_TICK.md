@@ -39,7 +39,7 @@ Contrat de `tick(pins_in) -> pins_out`:
 - `pins_out` = etat des SORTIES apres ce T-state (A, M1, MREQ, IORQ, RD, WR, HALT, RFSH, BUSAK) + D0..D7 quand le CPU ecrit.
 - L'hote lit `pins_out`: si `MREQ|RD` -> il place la donnee de la memoire dans D0..D7 de `pins_in` du tick SUIVANT; si `MREQ|WR` -> il memorise D0..D7 a l'adresse A; si `IORQ|RD` / `IORQ|WR` idem pour les ports.
 
-## 3. Sequence des broches par cycle machine (UNKNOWN - to confirm: la convention exacte par T-state sera calee sur SingleStepTests/z80, tache E13-10)
+## 3. Sequence des broches par cycle machine (format SingleStepTests documente dans docs/specs/33_SINGLESTEP_FORMAT.md; le calage exact par T-state reste a faire en E13-10)
 
 Convention de depart (T numerotes depuis 1; le CPU latche la donnee lue au tick du T3):
 
