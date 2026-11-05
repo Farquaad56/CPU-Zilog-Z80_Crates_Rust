@@ -3,6 +3,7 @@
 //! E09-01: RESET (pin handling lives in `Cpu::tick`, the register state in `Cpu::reset`).
 
 use crate::cpu::Cpu;
+use crate::engine::IrqKind;
 
 impl Cpu {
     /// Apply the RESET state: PC = 0, I = R = 0, IFF1 = IFF2 = false, IM = 0, AF = SP = 0xFFFF,
@@ -29,6 +30,19 @@ impl Cpu {
         self.eng.ei_delay = false;
         self.eng.ddcb = false;
         self.eng.f_written = false;
+        self.eng.irq = IrqKind::None;
+        self.eng.nmi_latch = false;
+        self.eng.nmi_prev = false;
+    }
+
+    /// Begin the NMI sequence (filled in by E09-04): for now only records the request.
+    pub(crate) fn start_nmi(&mut self) {
+        self.eng.irq = IrqKind::Nmi;
+    }
+
+    /// Begin the INT sequence (filled in by E09-05/06): for now only records the request.
+    pub(crate) fn start_int(&mut self) {
+        self.eng.irq = IrqKind::Int;
     }
 }
 
@@ -202,5 +216,109 @@ mod tests {
             assert!(!out.has(Pins::WR));
             assert!(!out.has(Pins::IORQ));
         }
+    }
+
+    /// Run one 4 T instruction made of `byte` (an M1 cycle) with `extra` pins held.
+    fn run_m1(cpu: &mut Cpu, byte: u8, extra: u64) {
+        for _ in 0..4 {
+            cpu.tick(Pins(0).set_data(byte).with(extra));
+        }
+    }
+
+    #[test]
+    fn e09_03_nmi_edge_latched() {
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x100;
+        cpu.tick(Pins(0));
+        // NMI active for 3 ticks in a row inside the first NOP: one request only.
+        for _ in 0..3 {
+            cpu.tick(Pins(0).with(Pins::NMI));
+        }
+        assert!(cpu.eng.nmi_latch);
+        assert!(cpu.at_instruction_boundary());
+        // The next instruction start (NMI released) consumes the latch once.
+        cpu.tick(Pins(0));
+        assert_eq!(cpu.eng.irq, IrqKind::Nmi);
+        assert!(!cpu.eng.nmi_latch);
+        run_m1(&mut cpu, 0, 0);
+        assert_eq!(cpu.eng.irq, IrqKind::None);
+    }
+
+    #[test]
+    fn e09_03_nmi_second_edge() {
+        let mut cpu = Cpu::new();
+        cpu.tick(Pins(0));
+        cpu.tick(Pins(0).with(Pins::NMI));
+        assert!(cpu.eng.nmi_latch);
+        cpu.eng.nmi_latch = false;
+        // Still high: no new request.
+        cpu.tick(Pins(0).with(Pins::NMI));
+        assert!(!cpu.eng.nmi_latch);
+        // Falls then rises again: new request.
+        cpu.tick(Pins(0));
+        cpu.tick(Pins(0).with(Pins::NMI));
+        // This tick starts a new instruction, which consumes the new request.
+        assert_eq!(cpu.eng.irq, IrqKind::Nmi);
+    }
+
+    #[test]
+    fn e09_03_int_level_ignored_when_di() {
+        let mut cpu = Cpu::new();
+        cpu.regs.iff1 = false;
+        for _ in 0..3 {
+            run_m1(&mut cpu, 0, Pins::INT);
+            assert_eq!(cpu.eng.irq, IrqKind::None);
+        }
+        cpu.regs.iff1 = true;
+        run_m1(&mut cpu, 0, Pins::INT);
+        cpu.tick(Pins(0).with(Pins::INT));
+        assert_eq!(cpu.eng.irq, IrqKind::Int);
+    }
+
+    #[test]
+    fn e09_03_ei_delay_one_instruction() {
+        let mut cpu = Cpu::new();
+        // EI with INT active: the boundary after EI does not accept.
+        run_m1(&mut cpu, 0xFB, Pins::INT);
+        assert!(cpu.regs.iff1);
+        // NOP starts: boundary test sees ei_delay, INT ignored.
+        run_m1(&mut cpu, 0, Pins::INT);
+        assert_eq!(cpu.eng.irq, IrqKind::None);
+        // Next boundary (after the NOP): accepted.
+        cpu.tick(Pins(0).with(Pins::INT));
+        assert_eq!(cpu.eng.irq, IrqKind::Int);
+    }
+
+    #[test]
+    fn e09_03_ei_ei() {
+        let mut cpu = Cpu::new();
+        run_m1(&mut cpu, 0xFB, Pins::INT);
+        run_m1(&mut cpu, 0xFB, Pins::INT);
+        run_m1(&mut cpu, 0, Pins::INT);
+        // Still inhibited at every boundary so far (EI EI), including the one after the NOP.
+        assert_eq!(cpu.eng.irq, IrqKind::None);
+        cpu.tick(Pins(0).with(Pins::INT));
+        assert_eq!(cpu.eng.irq, IrqKind::Int);
+    }
+
+    #[test]
+    fn e09_03_no_int_mid_prefix() {
+        let mut cpu = Cpu::new();
+        cpu.regs.iff1 = true;
+        // DD prefix fetch: the instruction is still active after its 4 T.
+        cpu.tick(Pins(0).set_data(0xDD));
+        for _ in 0..3 {
+            cpu.tick(Pins(0).set_data(0xDD).with(Pins::INT | Pins::NMI));
+        }
+        assert!(!cpu.at_instruction_boundary());
+        assert_eq!(cpu.eng.irq, IrqKind::None);
+        // Opcode NOP under DD (4 T more): accepted only after it completes.
+        for _ in 0..4 {
+            cpu.tick(Pins(0).with(Pins::INT));
+        }
+        assert!(cpu.at_instruction_boundary());
+        assert_eq!(cpu.eng.irq, IrqKind::None);
+        cpu.tick(Pins(0).with(Pins::INT));
+        assert_ne!(cpu.eng.irq, IrqKind::None);
     }
 }

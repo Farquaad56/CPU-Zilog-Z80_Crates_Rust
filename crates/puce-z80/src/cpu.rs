@@ -63,6 +63,14 @@ impl Cpu {
         }
         self.eng.in_reset = false;
 
+        // Interrupt pins: INT is a level, NMI is edge-triggered and latched (E09-03).
+        self.eng.int_level = pins.has(Pins::INT);
+        let nmi = pins.has(Pins::NMI);
+        if nmi && !self.eng.nmi_prev {
+            self.eng.nmi_latch = true;
+        }
+        self.eng.nmi_prev = nmi;
+
         // Step 2: If not active, start new instruction with FETCH_PROBE
         if !self.eng.active {
             self.eng.table = Table::Main;
@@ -79,6 +87,16 @@ impl Cpu {
             self.eng.f_written = false;
             // HALT: the next 'instruction' is an M1 NOP cycle at PC (E09-02).
             self.eng.halt_cycle = self.regs.halted;
+            // Interrupt acceptance at the instruction boundary, before the normal fetch.
+            self.eng.irq = crate::engine::IrqKind::None;
+            if self.eng.nmi_latch {
+                self.eng.nmi_latch = false;
+                self.start_nmi();
+            } else if self.eng.int_level && self.regs.iff1 && !self.eng.ei_delay {
+                self.start_int();
+            }
+            // The instruction after EI has now been given its one-instruction grace.
+            self.eng.ei_delay = false;
         }
 
         // Step 3: Get current token

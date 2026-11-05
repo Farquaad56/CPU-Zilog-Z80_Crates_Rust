@@ -59,6 +59,25 @@ pub(crate) struct Engine {
     pub in_reset: bool,
     /// True while the current M1 is a HALT NOP cycle (no PC increment, no decode).
     pub halt_cycle: bool,
+    /// Interrupt sequence selected at the last instruction boundary (E09-03).
+    pub irq: IrqKind,
+    /// A rising edge of NMI was seen and not yet serviced.
+    pub nmi_latch: bool,
+    /// Previous sampled level of the NMI pin (for edge detection).
+    pub nmi_prev: bool,
+    /// Sampled level of the INT pin on the current T-state.
+    pub int_level: bool,
+}
+
+/// Kind of interrupt sequence being started at an instruction boundary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IrqKind {
+    /// No interrupt sequence.
+    None,
+    /// Non-maskable interrupt.
+    Nmi,
+    /// Maskable interrupt.
+    Int,
 }
 
 impl Engine {
@@ -90,6 +109,10 @@ impl Engine {
             ei_delay: false,
             in_reset: false,
             halt_cycle: false,
+            irq: IrqKind::None,
+            nmi_latch: false,
+            nmi_prev: false,
+            int_level: false,
         }
     }
 
