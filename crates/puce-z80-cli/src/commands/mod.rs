@@ -25,18 +25,8 @@ pub mod suite_cmd;
 #[path = "ssc.rs"]
 pub mod ssc_cmd;
 
-pub mod fuse_cmd {
-    use super::*;
-
-    pub fn run(_args: FuseArgs) -> Result<(), String> {
-        Err("not implemented".into())
-    }
-
-    #[derive(Debug)]
-    pub struct FuseArgs {
-        pub dir: PathBuf,
-    }
-}
+#[path = "fuse.rs"]
+pub mod fuse_cmd;
 
 pub mod z80test_cmd {
     use super::*;
