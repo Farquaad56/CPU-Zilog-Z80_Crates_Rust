@@ -4,7 +4,7 @@
 //! "ignored" (the prefix is a 4 T no-op and the Main semantics apply unchanged).
 
 use super::main::sem_main;
-use super::regs::{r8x, set_f, set_r8x};
+use super::regs::{r8x, set_f, set_r8, set_r8x};
 use crate::alu;
 use crate::cpu::Cpu;
 
@@ -146,7 +146,7 @@ fn is_idx_pair_op(op: u8) -> bool {
 /// `op` is the operation byte read as data. X0: v = TMP.L (byte read at (IX+d));
 /// the result goes back to TMP.L and the plan writes it, except for BIT (no write).
 /// BIT takes X and Y from the high byte of the address IX+d.
-/// The undocumented copy of the result into register r(z) for z != 6 is E08-08.
+/// For z != 6 the result is also copied into the real register r(z) (undocumented, E08-08).
 pub(crate) fn sem_ddcb(cpu: &mut Cpu, op: u8, hook_no: u8) {
     if hook_no != 0 {
         return;
@@ -155,29 +155,27 @@ pub(crate) fn sem_ddcb(cpu: &mut Cpu, op: u8, hook_no: u8) {
     let y = (op >> 3) & 7;
     let z = op & 7;
     let v = cpu.eng.tmp_l;
-    match x {
+    let res = match x {
         0 => {
-            if z == 6 {
-                let (res, flags) = alu::rot(y, v, cpu.regs.f);
-                cpu.eng.tmp_l = res;
-                set_f(cpu, flags);
-            }
+            let (res, flags) = alu::rot(y, v, cpu.regs.f);
+            set_f(cpu, flags);
+            res
         }
         1 => {
+            // BIT: X and Y from the high byte of IX+d; z is ignored, nothing is written back.
             let xy = (cpu.eng.xy_addr >> 8) as u8;
             let flags = alu::bit_flags(v, y, cpu.regs.f, xy);
             set_f(cpu, flags);
+            return;
         }
-        2 => {
-            if z == 6 {
-                cpu.eng.tmp_l = v & !(1 << y);
-            }
-        }
-        _ => {
-            if z == 6 {
-                cpu.eng.tmp_l = v | (1 << y);
-            }
-        }
+        2 => v & !(1 << y),
+        _ => v | (1 << y),
+    };
+    // The plan writes TMP.L back to (IX+d).
+    cpu.eng.tmp_l = res;
+    // Undocumented (E08-08): for z != 6 the result is also copied into the real register r(z).
+    if z != 6 {
+        set_r8(cpu, z, res);
     }
 }
 
@@ -569,5 +567,41 @@ mod tests {
         sem_ddcb(&mut cpu, 0x36, 0);
         assert_eq!(cpu.eng.tmp_l, 0x01);
         assert_ne!(cpu.regs.f & crate::regs::flag::C, 0);
+    }
+
+    #[test]
+    fn e08_08_rlc_b_copy() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.eng.tmp_l = 0x85;
+        sem_ddcb(&mut cpu, 0x00, 0);
+        assert_eq!(cpu.regs.b, 0x0B);
+        assert_eq!(cpu.eng.tmp_l, 0x0B);
+    }
+
+    #[test]
+    fn e08_08_set_a_copy() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.eng.tmp_l = 0x00;
+        sem_ddcb(&mut cpu, 0xC7, 0);
+        assert_eq!(cpu.regs.a, 0x01);
+    }
+
+    #[test]
+    fn e08_08_res_l_copy() {
+        let mut cpu = with_prefix(Prefix::Fd);
+        cpu.regs.iy = 0x1234;
+        cpu.eng.tmp_l = 0xFF;
+        sem_ddcb(&mut cpu, 0x85, 0);
+        assert_eq!(cpu.regs.l, 0xFE);
+        assert_eq!(cpu.regs.iy, 0x1234);
+    }
+
+    #[test]
+    fn e08_08_memory_also_written() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.eng.tmp_l = 0x01;
+        sem_ddcb(&mut cpu, 0x08, 0); // RRC (IX+d),B
+        assert_eq!(cpu.eng.tmp_l, 0x80);
+        assert_eq!(cpu.regs.b, 0x80);
     }
 }
