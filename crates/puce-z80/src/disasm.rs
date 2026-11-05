@@ -2,7 +2,7 @@
 //!
 //! E11-01: text buffer, number formatters, and the operand-less, prefix-less case.
 
-use crate::tables::mnem::{MNEM_CB, MNEM_MAIN};
+use crate::tables::mnem::{MNEM_CB, MNEM_ED, MNEM_MAIN};
 use core::fmt;
 
 /// Capacity of a disassembled text, in bytes.
@@ -235,13 +235,16 @@ fn expand(t: &mut DisText, tmpl: &str, ops: &Operands) {
 
 /// Disassemble the instruction at `addr`, fetching bytes through `read`.
 ///
-/// E11-02 handles the main table and the CB table; ED, DD and FD arrive in E11-03 / E11-04
-/// (until then they report the model text of the main table and a length of 1).
+/// E11-03 handles the main, CB and ED tables; DD and FD arrive in E11-04 (until then they
+/// report the model text of the main table and a length of 1).
 pub fn disassemble(addr: u16, read: &mut dyn FnMut(u16) -> u8) -> Insn {
     let first_byte = read(addr);
     let (tmpl, prefix, op, first) = if first_byte == 0xCB {
         let op = read(addr.wrapping_add(1));
         (MNEM_CB[op as usize], 0xCB, op, addr.wrapping_add(2))
+    } else if first_byte == 0xED {
+        let op = read(addr.wrapping_add(1));
+        (MNEM_ED[op as usize], 0xED, op, addr.wrapping_add(2))
     } else {
         (
             MNEM_MAIN[first_byte as usize],
@@ -415,5 +418,43 @@ mod tests {
         assert_eq!(dis(0, &[0x32, 0x00, 0x90]).text.as_str(), "LD ($9000),A");
         assert_eq!(dis(0, &[0xD3, 0x7E]).text.as_str(), "OUT ($7E),A");
         assert_eq!(dis(0, &[0x36, 0x01]).text.as_str(), "LD (HL),$01");
+    }
+
+    #[test]
+    fn e11_03_ld_nn_bc() {
+        let i = dis(0, &[0xED, 0x43, 0x34, 0x12]);
+        assert_eq!(i.text.as_str(), "LD ($1234),BC");
+        assert_eq!(i.len, 4);
+        assert_eq!(i.prefix, 0xED);
+        assert_eq!(i.op, 0x43);
+    }
+
+    #[test]
+    fn e11_03_ldir() {
+        let i = dis(0, &[0xED, 0xB0]);
+        assert_eq!(i.text.as_str(), "LDIR");
+        assert_eq!(i.len, 2);
+    }
+
+    #[test]
+    fn e11_03_neg() {
+        assert_eq!(dis(0, &[0xED, 0x44]).text.as_str(), "NEG");
+    }
+
+    #[test]
+    fn e11_03_im2() {
+        assert_eq!(dis(0, &[0xED, 0x5E]).text.as_str(), "IM 2");
+    }
+
+    #[test]
+    fn e11_03_unknown() {
+        let i = dis(0, &[0xED, 0x00]);
+        assert_eq!(i.text.as_str(), "NOP*");
+        assert_eq!(i.len, 2);
+    }
+
+    #[test]
+    fn e11_03_reti() {
+        assert_eq!(dis(0, &[0xED, 0x4D]).text.as_str(), "RETI");
     }
 }
