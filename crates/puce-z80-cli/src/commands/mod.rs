@@ -19,16 +19,8 @@ pub mod run_cmd {
 #[path = "cpm.rs"]
 pub mod cpm_cmd;
 
-pub mod suite_cmd {
-    pub fn run(_args: SuiteArgs) -> Result<(), String> {
-        Err("not implemented".into())
-    }
-
-    #[derive(Debug)]
-    pub struct SuiteArgs {
-        pub name: String,
-    }
-}
+#[path = "suite.rs"]
+pub mod suite_cmd;
 
 pub mod ssc_cmd {
     use super::*;
