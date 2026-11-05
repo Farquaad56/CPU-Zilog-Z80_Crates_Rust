@@ -53,8 +53,8 @@ pub mod __internal {
 mod tables_check;
 // #[cfg(feature = "inspect")]
 // pub mod probe;        // Inspection journal and history
-// #[cfg(feature = "disasm")]
-// pub mod disasm;       // Disassembler
+#[cfg(feature = "disasm")]
+pub mod disasm;
 
 #[cfg(test)]
 mod tests {
