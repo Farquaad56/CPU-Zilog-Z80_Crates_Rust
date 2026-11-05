@@ -56,6 +56,28 @@ impl Cpu {
         !self.eng.active
     }
 
+    /// True when the instruction just executed was `EI`: interrupt acceptance is delayed by
+    /// one instruction (the `ei` field of the SingleStepTests format).
+    pub fn ei_pending(&self) -> bool {
+        self.eng.ei_delay
+    }
+
+    /// Set the EI delay state (test harnesses: load an initial state).
+    pub fn set_ei_pending(&mut self, v: bool) {
+        self.eng.ei_delay = v;
+    }
+
+    /// True when the instruction just executed was `LD A,I` or `LD A,R` (the `p` field of the
+    /// SingleStepTests format).
+    pub fn ld_air_pending(&self) -> bool {
+        self.eng.ld_air_now
+    }
+
+    /// Set the `LD A,I / LD A,R` state (test harnesses: load an initial state).
+    pub fn set_ld_air_pending(&mut self, v: bool) {
+        self.eng.ld_air_now = v;
+    }
+
     /// Execute one T-state.
     ///
     /// `pins_in` contains inputs seen by the CPU during this T-state.
