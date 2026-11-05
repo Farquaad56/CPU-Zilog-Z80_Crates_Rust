@@ -3,7 +3,17 @@
 //! E09-01: RESET (pin handling lives in `Cpu::tick`, the register state in `Cpu::reset`).
 
 use crate::cpu::Cpu;
+use crate::engine::plan::{Addr, Kind, Reg, Tok};
 use crate::engine::IrqKind;
+
+/// NMI acknowledge: M1 of 5 T (byte ignored, PC not incremented), then push PC high and low.
+/// The hook after the last write sets IFF, PC and WZ.
+static NMI_PLAN: [Tok; 4] = [
+    Tok::new(Kind::F, 5, Addr::None, Reg::None, false),
+    Tok::new(Kind::W, 3, Addr::DecSp, Reg::H, false),
+    Tok::new(Kind::W, 3, Addr::DecSp, Reg::L, false),
+    Tok::new(Kind::X, 0, Addr::None, Reg::None, false),
+];
 
 impl Cpu {
     /// Apply the RESET state: PC = 0, I = R = 0, IFF1 = IFF2 = false, IM = 0, AF = SP = 0xFFFF,
@@ -35,9 +45,29 @@ impl Cpu {
         self.eng.nmi_prev = false;
     }
 
-    /// Begin the NMI sequence (filled in by E09-04): for now only records the request.
+    /// Begin the NMI sequence (11 T): the return address goes to TMP (PC + 1 when halted).
     pub(crate) fn start_nmi(&mut self) {
         self.eng.irq = IrqKind::Nmi;
+        let mut ret = self.regs.pc;
+        if self.regs.halted {
+            ret = ret.wrapping_add(1);
+            self.regs.halted = false;
+            self.eng.halt_cycle = false;
+        }
+        self.eng.tmp_h = (ret >> 8) as u8;
+        self.eng.tmp_l = ret as u8;
+        self.eng.plan = &NMI_PLAN;
+        self.eng.idx = 0;
+    }
+
+    /// Hook of an interrupt sequence (called instead of `sem` while one is running).
+    pub(crate) fn int_hook(&mut self, _hook_no: u8) {
+        if self.eng.irq == IrqKind::Nmi {
+            self.regs.iff2 = self.regs.iff1;
+            self.regs.iff1 = false;
+            self.regs.pc = 0x0066;
+            self.regs.wz = 0x0066;
+        }
     }
 
     /// Begin the INT sequence (filled in by E09-05/06): for now only records the request.
@@ -240,7 +270,12 @@ mod tests {
         cpu.tick(Pins(0));
         assert_eq!(cpu.eng.irq, IrqKind::Nmi);
         assert!(!cpu.eng.nmi_latch);
-        run_m1(&mut cpu, 0, 0);
+        // The request was consumed: after the 11 T sequence no second NMI starts.
+        for _ in 0..10 {
+            cpu.tick(Pins(0));
+        }
+        assert!(cpu.at_instruction_boundary());
+        cpu.tick(Pins(0));
         assert_eq!(cpu.eng.irq, IrqKind::None);
     }
 
@@ -320,5 +355,107 @@ mod tests {
         assert_eq!(cpu.eng.irq, IrqKind::None);
         cpu.tick(Pins(0).with(Pins::INT));
         assert_ne!(cpu.eng.irq, IrqKind::None);
+    }
+
+    /// Tick `n` T-states serving `ram` by hand, with `extra` input pins held.
+    fn run_ticks(cpu: &mut Cpu, ram: &mut SimpleRam, n: u32, extra: u64) {
+        let mut data = 0u8;
+        for _ in 0..n {
+            let out = cpu.tick(Pins(0).set_data(data).with(extra));
+            if out.is_mem_read() {
+                data = ram.read(out.addr());
+            }
+            if out.is_mem_write() {
+                ram.write(out.addr(), out.data());
+            }
+        }
+    }
+
+    /// CPU at address 0x1234 with SP = 0x8000 and an NMI request pending.
+    fn nmi_cpu() -> (Cpu, SimpleRam) {
+        let ram = SimpleRam::new();
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x1234;
+        cpu.regs.sp = 0x8000;
+        cpu.eng.nmi_latch = true;
+        (cpu, ram)
+    }
+
+    #[test]
+    fn e09_04_nmi_11t() {
+        let (mut cpu, mut ram) = nmi_cpu();
+        assert_eq!(cpu.step(&mut ram), 11);
+        assert_eq!(cpu.instruction_tstates(), 11);
+        assert!(cpu.at_instruction_boundary());
+    }
+
+    #[test]
+    fn e09_04_nmi_pushes_pc() {
+        let (mut cpu, mut ram) = nmi_cpu();
+        cpu.step(&mut ram);
+        assert_eq!(ram.read(0x7FFF), 0x12);
+        assert_eq!(ram.read(0x7FFE), 0x34);
+        assert_eq!(cpu.regs.sp, 0x7FFE);
+    }
+
+    #[test]
+    fn e09_04_nmi_vector() {
+        let (mut cpu, mut ram) = nmi_cpu();
+        cpu.step(&mut ram);
+        assert_eq!(cpu.regs.pc, 0x0066);
+        assert_eq!(cpu.regs.wz, 0x0066);
+    }
+
+    #[test]
+    fn e09_04_nmi_iff() {
+        let (mut cpu, mut ram) = nmi_cpu();
+        cpu.regs.iff1 = true;
+        cpu.regs.iff2 = false;
+        cpu.step(&mut ram);
+        assert!(!cpu.regs.iff1);
+        assert!(cpu.regs.iff2);
+        let (mut cpu, mut ram) = nmi_cpu();
+        cpu.regs.iff1 = false;
+        cpu.regs.iff2 = true;
+        cpu.step(&mut ram);
+        assert!(!cpu.regs.iff1);
+        assert!(!cpu.regs.iff2);
+    }
+
+    #[test]
+    fn e09_04_nmi_wakes_halt() {
+        let (mut cpu, mut ram) = halted_cpu();
+        cpu.regs.sp = 0x8000;
+        cpu.eng.nmi_latch = true;
+        assert_eq!(cpu.step(&mut ram), 11);
+        assert!(!cpu.regs.halted);
+        assert_eq!(ram.read(0x7FFF), 0x00);
+        assert_eq!(ram.read(0x7FFE), 0x01);
+        assert_eq!(cpu.regs.pc, 0x0066);
+    }
+
+    #[test]
+    fn e09_04_nmi_priority() {
+        let (mut cpu, mut ram) = nmi_cpu();
+        cpu.regs.iff1 = true;
+        // INT held active the whole time, together with the NMI request.
+        run_ticks(&mut cpu, &mut ram, 11, Pins::INT);
+        assert_eq!(cpu.regs.pc, 0x0066);
+        assert_eq!(ram.read(0x7FFE), 0x34);
+        assert!(!cpu.regs.iff1, "NMI went first and masked INT");
+        assert!(cpu.at_instruction_boundary());
+    }
+
+    #[test]
+    fn e09_04_retn_restores() {
+        let (mut cpu, mut ram) = nmi_cpu();
+        ram.write(0x0066, 0xED);
+        ram.write(0x0067, 0x45);
+        cpu.regs.iff1 = true;
+        cpu.step(&mut ram);
+        assert!(!cpu.regs.iff1);
+        assert_eq!(cpu.step(&mut ram), 14);
+        assert!(cpu.regs.iff1);
+        assert_eq!(cpu.regs.pc, 0x1234);
     }
 }

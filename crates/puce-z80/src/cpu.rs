@@ -5,7 +5,7 @@ use crate::engine::addr::resolve;
 use crate::engine::decode::{decode, plan_of, Decoded, Prefix, Table};
 use crate::engine::mcycle::fetch_pins;
 use crate::engine::plan::{Addr, Kind, Reg, Tok, FETCH_PROBE};
-use crate::engine::Engine;
+use crate::engine::{Engine, IrqKind};
 use crate::pins::Pins;
 use crate::regs::Regs;
 use crate::sem::sem;
@@ -106,8 +106,8 @@ impl Cpu {
         if self.eng.t == 0 && cur.is_bus() {
             let port = matches!(cur.kind, Kind::N | Kind::O);
             // An M1 cycle always fetches from PC (table F tokens may carry Addr::None).
-            if self.eng.halt_cycle {
-                // HALT NOP cycle: the address is PC and PC does not change.
+            if cur.kind == Kind::F && (self.eng.halt_cycle || self.eng.irq == IrqKind::Nmi) {
+                // HALT NOP / NMI acknowledge cycle: the address is PC and PC does not change.
                 self.eng.cur_addr = self.regs.pc;
             } else {
                 let a = if cur.kind == Kind::F {
@@ -139,7 +139,7 @@ impl Cpu {
                 );
                 // Opcode latched at T3: decode and possibly replace the current token.
                 // The byte read during a HALT cycle is ignored (no decode).
-                if self.eng.t == 2 && !self.eng.halt_cycle {
+                if self.eng.t == 2 && !self.eng.halt_cycle && self.eng.irq != IrqKind::Nmi {
                     let byte = pins.data();
                     self.eng.latched = byte;
                     self.decode_m1(byte);
@@ -228,7 +228,12 @@ impl Cpu {
             while self.eng.idx < self.eng.plan.len() {
                 let next = &self.eng.plan[self.eng.idx];
                 if next.is_hook() {
-                    sem(self, self.eng.table, self.eng.op, next.hook_no());
+                    let hook = next.hook_no();
+                    if self.eng.irq == IrqKind::Nmi {
+                        self.int_hook(hook);
+                    } else {
+                        sem(self, self.eng.table, self.eng.op, hook);
+                    }
                     self.eng.idx += 1;
                 } else if next.cond && !self.eng.cond {
                     // Skip conditional token (0 T-states)
