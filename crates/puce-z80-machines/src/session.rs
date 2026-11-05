@@ -298,6 +298,8 @@ pub fn alu_name(op: u8) -> String {
 struct Shared {
     snap: Snapshot,
     console: String,
+    /// Number of publications so far.
+    generation: u64,
 }
 
 /// Handle on the simulation thread.
@@ -356,6 +358,11 @@ impl Session {
             .lock()
             .map(|s| s.snap.clone())
             .unwrap_or_default()
+    }
+
+    /// Number of states published so far (grows with every publication).
+    pub fn generation(&self) -> u64 {
+        self.shared.lock().map(|s| s.generation).unwrap_or(0)
     }
 
     /// Console text from byte position `pos` and the new position (per-client cursor).
@@ -687,6 +694,7 @@ impl Worker {
             }
             s.console.push_str(&text);
             s.snap = snap;
+            s.generation += 1;
         }
     }
 }
