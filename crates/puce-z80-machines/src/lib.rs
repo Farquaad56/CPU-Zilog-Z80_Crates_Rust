@@ -8,6 +8,7 @@
 
 pub mod cpm;
 pub mod session;
+pub mod ssc;
 pub mod zx;
 
 /// Crate version (from Cargo.toml).
