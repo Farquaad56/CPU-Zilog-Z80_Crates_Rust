@@ -141,9 +141,44 @@ fn is_idx_pair_op(op: u8) -> bool {
     )
 }
 
-/// Execute DD CB / FD CB instruction semantics (stub).
-pub(crate) fn sem_ddcb(_cpu: &mut Cpu, _op: u8, _hook_no: u8) {
-    // Stub: actual semantics implemented in E05+
+/// Execute DD CB / FD CB instruction semantics (E08-07).
+///
+/// `op` is the operation byte read as data. X0: v = TMP.L (byte read at (IX+d));
+/// the result goes back to TMP.L and the plan writes it, except for BIT (no write).
+/// BIT takes X and Y from the high byte of the address IX+d.
+/// The undocumented copy of the result into register r(z) for z != 6 is E08-08.
+pub(crate) fn sem_ddcb(cpu: &mut Cpu, op: u8, hook_no: u8) {
+    if hook_no != 0 {
+        return;
+    }
+    let x = op >> 6;
+    let y = (op >> 3) & 7;
+    let z = op & 7;
+    let v = cpu.eng.tmp_l;
+    match x {
+        0 => {
+            if z == 6 {
+                let (res, flags) = alu::rot(y, v, cpu.regs.f);
+                cpu.eng.tmp_l = res;
+                set_f(cpu, flags);
+            }
+        }
+        1 => {
+            let xy = (cpu.eng.xy_addr >> 8) as u8;
+            let flags = alu::bit_flags(v, y, cpu.regs.f, xy);
+            set_f(cpu, flags);
+        }
+        2 => {
+            if z == 6 {
+                cpu.eng.tmp_l = v & !(1 << y);
+            }
+        }
+        _ => {
+            if z == 6 {
+                cpu.eng.tmp_l = v | (1 << y);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -487,5 +522,52 @@ mod tests {
         cpu.regs.ix = 0xFFFF;
         sem_idx(&mut cpu, 0x7D, 0);
         assert_eq!(cpu.regs.a, 0x34);
+    }
+
+    #[test]
+    fn e08_07_rlc_ix_d() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.eng.tmp_l = 0x85;
+        sem_ddcb(&mut cpu, 0x06, 0);
+        assert_eq!(cpu.eng.tmp_l, 0x0B);
+        assert_ne!(cpu.regs.f & crate::regs::flag::C, 0);
+    }
+
+    #[test]
+    fn e08_07_bit_ix_d() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.eng.tmp_l = 0x00;
+        cpu.eng.xy_addr = 0x2800; // high byte 0x28: X and Y set
+        sem_ddcb(&mut cpu, 0x46, 0);
+        let f = cpu.regs.f;
+        assert_ne!(f & crate::regs::flag::Z, 0);
+        assert_ne!(f & crate::regs::flag::X, 0);
+        assert_ne!(f & crate::regs::flag::Y, 0);
+        assert_eq!(cpu.eng.tmp_l, 0x00);
+    }
+
+    #[test]
+    fn e08_07_res_ix_d() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.eng.tmp_l = 0xFF;
+        sem_ddcb(&mut cpu, 0x86, 0);
+        assert_eq!(cpu.eng.tmp_l, 0xFE);
+    }
+
+    #[test]
+    fn e08_07_set_iy_d() {
+        let mut cpu = with_prefix(Prefix::Fd);
+        cpu.eng.tmp_l = 0x00;
+        sem_ddcb(&mut cpu, 0xC6, 0);
+        assert_eq!(cpu.eng.tmp_l, 0x01);
+    }
+
+    #[test]
+    fn e08_07_sll_ix_d() {
+        let mut cpu = with_prefix(Prefix::Dd);
+        cpu.eng.tmp_l = 0x80;
+        sem_ddcb(&mut cpu, 0x36, 0);
+        assert_eq!(cpu.eng.tmp_l, 0x01);
+        assert_ne!(cpu.regs.f & crate::regs::flag::C, 0);
     }
 }
