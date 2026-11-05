@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 The format follows Keep a Changelog; versions follow Semantic Versioning
 (0.x while the API is not stable).
 
+## [Unreleased]
+
+### Added
+
+- `Variant::Cmos` (`Cpu::with_variant`): `OUT (C),0` writes 0xFF, no `LD A,I/R` + INT bug, SCF/CCF without Q (D-028).
+- `Cpu::reset` documented after D-028 (PC=I=R=0, AF=SP=0xFFFF, IFF/IM cleared).
+- Feature `serde`: `Serialize`/`Deserialize` for `Regs`, `Variant` and `CpuState`; `Cpu::save_state`, `load_state`, `from_state` (instruction boundaries).
+- `puce-z80-wasm`: the core in the browser through `wasm-bindgen` (demo in `crates/puce-z80-wasm/demo`).
+
 ## [0.1.0] - unreleased
 
 First release of the cycle-accurate Zilog Z80 workspace.
@@ -46,7 +55,3 @@ First release of the cycle-accurate Zilog Z80 workspace.
 - The silicon of the NMOS Zilog Z80 is the reference (z80test, SingleStepTests); where FUSE
   disagrees the difference is listed as a known exception.
 - After HALT, PC points just past the HALT opcode (as in SingleStepTests).
-
-### Not in this release
-
-- CMOS variant, save states (serde) and a WASM build of the core.

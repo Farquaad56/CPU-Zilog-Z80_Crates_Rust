@@ -126,8 +126,7 @@ Speed: about 12 million instructions per second in release mode on the CP/M exer
 
 ## Status
 
-Version 0.1.x. The public API may change until 1.0. Not implemented yet: the CMOS variants,
-serialisation of the state (the registers are readable in `cpu.regs`).
+Version 0.1.x. The public API may change until 1.0. The NMOS (default) and CMOS variants are available (`Cpu::with_variant`); the feature `serde` adds save states (`Cpu::save_state` / `Cpu::from_state`).
 
 ## License
 
