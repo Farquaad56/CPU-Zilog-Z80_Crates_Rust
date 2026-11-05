@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 
 # Git Bash on Windows does not always have the Rust toolchain in its PATH.
 if ! command -v cargo >/dev/null 2>&1; then
-  export PATH="$HOME/.cargo/bin:$USERPROFILE/.cargo/bin:$PATH"
+  export PATH="${HOME:-}/.cargo/bin:${USERPROFILE:-}/.cargo/bin:$PATH"
 fi
 if ! command -v cargo >/dev/null 2>&1; then
   echo "error: cargo not found (install Rust from https://rustup.rs)" >&2
