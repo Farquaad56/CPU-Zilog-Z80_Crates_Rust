@@ -22,19 +22,8 @@ pub mod cpm_cmd;
 #[path = "suite.rs"]
 pub mod suite_cmd;
 
-pub mod ssc_cmd {
-    use super::*;
-
-    pub fn run(_args: SscArgs) -> Result<(), String> {
-        Err("not implemented".into())
-    }
-
-    #[derive(Debug)]
-    pub struct SscArgs {
-        pub dir: PathBuf,
-        pub filter: Option<String>,
-    }
-}
+#[path = "ssc.rs"]
+pub mod ssc_cmd;
 
 pub mod fuse_cmd {
     use super::*;
