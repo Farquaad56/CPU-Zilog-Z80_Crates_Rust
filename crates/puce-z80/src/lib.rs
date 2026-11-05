@@ -2,7 +2,43 @@
 //!
 //! This crate provides a reusable, cycle-perfect Z80 implementation suitable for
 //! console and arcade emulation. It is `no_std`, allocation-free, and contains no
-//! unsafe code.
+//! unsafe code. It has no dependency and no internal clock: the host decides when
+//! time passes. It models the NMOS Z80, including the undocumented flags and the
+//! `WZ`/`Q` behaviour.
+//!
+//! # Two ways to drive the CPU
+//!
+//! * [`Cpu::step`] runs one instruction against a [`Bus`] (memory, ports, interrupts,
+//!   wait states, `RETI` observation) and returns the T-states used. This is the easy way.
+//! * [`Cpu::tick`] runs exactly one T-state against a set of [`Pins`]. The host wires the
+//!   address/data/control pins itself: this is what a console or an arcade board with
+//!   shared buses needs. `step` is built on `tick`, there is a single timing implementation.
+//!
+//! # Example
+//!
+//! ```
+//! use puce_z80::{Cpu, SimpleRam};
+//!
+//! let mut ram = SimpleRam::new();
+//! // LD A,1 ; ADD A,A ; HALT
+//! ram.mem[..4].copy_from_slice(&[0x3E, 0x01, 0x87, 0x76]);
+//!
+//! let mut cpu = Cpu::new();
+//! let mut tstates = 0;
+//! for _ in 0..3 {
+//!     tstates += cpu.step(&mut ram);
+//! }
+//! assert_eq!(cpu.regs.a, 2);
+//! assert_eq!(tstates, 7 + 4 + 4);
+//! ```
+//!
+//! # Features
+//!
+//! * `std`: enables `SimpleRam::boxed`.
+//! * `inspect`: journal of the last ALU operation and bus activity, for debuggers.
+//! * `disasm`: instruction disassembler.
+//!
+//! Complete hosts (CP/M, ZX-like contention, shared bus, IM 2 with a CTC) are in `examples/`.
 
 #![no_std]
 #![forbid(unsafe_code)]

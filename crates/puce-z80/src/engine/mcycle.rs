@@ -1,4 +1,4 @@
-//! Memory and internal cycle pin outputs (R3/R4/R5, W3/W5, I<n>).
+//! Memory and internal cycle pin outputs (R3/R4/R5, W3/W5, `I<n>`).
 //!
 //! Pure functions that compute the output pins for each T-state of memory
 //! read/write cycles and internal cycles. Does not modify CPU state.
