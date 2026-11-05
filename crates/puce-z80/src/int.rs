@@ -93,6 +93,21 @@ impl Cpu {
                 self.regs.pc = 0x0066;
                 self.regs.wz = 0x0066;
             }
+            (IrqKind::Int, 0, 0) => {
+                // IM 0: the byte on the bus is executed. v1 handles RST n only; any other byte
+                // is treated as RST 38H (0xFF, the pulled-up bus value).
+                // UNKNOWN - to confirm : CALL nn / other instructions on the bus (3 ack cycles).
+                let b = self.eng.latched;
+                let target = if (b & 0xC7) == 0xC7 {
+                    (b & 0x38) as u16
+                } else {
+                    0x0038
+                };
+                self.regs.iff1 = false;
+                self.regs.iff2 = false;
+                self.regs.pc = target;
+                self.regs.wz = target;
+            }
             (IrqKind::Int, 1, 0) => {
                 self.regs.iff1 = false;
                 self.regs.iff2 = false;
@@ -115,11 +130,10 @@ impl Cpu {
     /// Begin the INT sequence (filled in by E09-05/06): for now only records the request.
     pub(crate) fn start_int(&mut self) {
         self.eng.irq = IrqKind::Int;
-        // IM 0 (instruction on the bus) is filled in by E09-06.
+        // IM 0 runs the same plan as IM 1; its hook decodes the byte read on the bus.
         let plan: &'static [Tok] = match self.regs.im {
-            1 => &IM1_PLAN,
             2 => &IM2_PLAN,
-            _ => return,
+            _ => &IM1_PLAN,
         };
         let mut ret = self.regs.pc;
         if self.regs.halted {
@@ -656,5 +670,39 @@ mod tests {
         assert_eq!(cpu.step(&mut bus), 4);
         assert_eq!(bus.ack_ticks, 0);
         assert_eq!(cpu.regs.pc, 0x0103);
+    }
+
+    #[test]
+    fn e09_06_im0_rst38() {
+        let (mut cpu, mut bus) = int_cpu(0);
+        bus.ack = 0xFF;
+        assert_eq!(cpu.step(&mut bus), 13);
+        assert_eq!(cpu.regs.pc, 0x0038);
+        assert_eq!(cpu.regs.wz, 0x0038);
+        assert_eq!(bus.ram.read(0x7FFE), 0x01);
+    }
+
+    #[test]
+    fn e09_06_im0_rst10() {
+        let (mut cpu, mut bus) = int_cpu(0);
+        bus.ack = 0xD7;
+        assert_eq!(cpu.step(&mut bus), 13);
+        assert_eq!(cpu.regs.pc, 0x0010);
+    }
+
+    #[test]
+    fn e09_06_im0_other_falls_back() {
+        let (mut cpu, mut bus) = int_cpu(0);
+        bus.ack = 0x00;
+        assert_eq!(cpu.step(&mut bus), 13);
+        assert_eq!(cpu.regs.pc, 0x0038);
+    }
+
+    #[test]
+    fn e09_06_im0_iff() {
+        let (mut cpu, mut bus) = int_cpu(0);
+        cpu.step(&mut bus);
+        assert!(!cpu.regs.iff1);
+        assert!(!cpu.regs.iff2);
     }
 }
