@@ -306,6 +306,7 @@ struct Shared {
 pub struct Session {
     tx: Sender<Command>,
     shared: Arc<Mutex<Shared>>,
+    thread: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
 impl Session {
@@ -314,7 +315,7 @@ impl Session {
         let (tx, rx) = channel();
         let shared = Arc::new(Mutex::new(Shared::default()));
         let out = Arc::clone(&shared);
-        std::thread::spawn(move || {
+        let thread = std::thread::spawn(move || {
             let mut w = Worker::new();
             let mut last = Instant::now();
             loop {
@@ -343,7 +344,27 @@ impl Session {
                 }
             }
         });
-        Session { tx, shared }
+        Session {
+            tx,
+            shared,
+            thread: Mutex::new(Some(thread)),
+        }
+    }
+
+    /// True once the simulation thread has ended (after [`Command::Quit`]).
+    pub fn finished(&self) -> bool {
+        self.thread
+            .lock()
+            .map(|t| t.as_ref().is_none_or(|h| h.is_finished()))
+            .unwrap_or(true)
+    }
+
+    /// Wait for the simulation thread to end; call after sending [`Command::Quit`].
+    pub fn join(&self) {
+        let handle = self.thread.lock().ok().and_then(|mut t| t.take());
+        if let Some(h) = handle {
+            let _ = h.join();
+        }
     }
 
     /// Queue a command for the simulation thread.
@@ -800,6 +821,15 @@ mod tests {
         s.send(Command::Step(1));
         wait_for(&s, "n == 1", |x| x.n == 1);
         s.send(Command::Quit);
+    }
+
+    #[test]
+    fn e14_08_session_join_after_quit() {
+        let s = Session::spawn();
+        assert!(!s.finished());
+        s.send(Command::Quit);
+        s.join();
+        assert!(s.finished());
     }
 
     #[test]
