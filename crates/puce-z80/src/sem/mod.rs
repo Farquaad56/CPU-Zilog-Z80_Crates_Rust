@@ -517,6 +517,7 @@ mod tests {
     #[test]
     fn e05_09_sbc_a_hl() {
         let mut cpu = Cpu::new();
+        cpu.regs.f = 0; // Cpu::new() leaves F = 0xFF after RESET (carry would be set)
         cpu.regs.a = 0x80;
         cpu.eng.tmp_l = 0x40; // (HL) value loaded into tmp_l
         sem(&mut cpu, Table::Main, 0x9E, 0); // SBC A,(HL) (y=3, z=6)

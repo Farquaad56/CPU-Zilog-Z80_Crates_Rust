@@ -827,6 +827,7 @@ mod tests {
     #[test]
     fn e07_05_cpi() {
         let mut cpu = Cpu::new();
+        cpu.regs.f = 0; // Cpu::new() leaves F = 0xFF after RESET
         cpu.regs.a = 0x10;
         cpu.regs.set_hl(0x3000);
         cpu.regs.set_bc(0x0001);
